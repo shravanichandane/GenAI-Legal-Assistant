@@ -14,8 +14,10 @@ class Document(Base):
     filename = Column(String, index=True)
     content = Column(Text)
     upload_date = Column(DateTime, default=datetime.utcnow)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     
     clauses = relationship("Clause", back_populates="document")
+    owner = relationship("User", back_populates="documents")
 
 class Clause(Base):
     __tablename__ = "clauses"

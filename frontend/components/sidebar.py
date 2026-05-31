@@ -179,6 +179,23 @@ def render_sidebar():
             </div>
             """, unsafe_allow_html=True)
         
+        # User profile section
+        current_user = st.session_state.get("current_user")
+        if current_user:
+            user_name = current_user.get("full_name", "User")
+            user_email = current_user.get("email", "")
+            st.markdown(f"""
+            <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1)); 
+                        border-radius: 12px; padding: 1rem; margin: 0.5rem 0; 
+                        border: 1px solid rgba(16, 185, 129, 0.2);">
+                <div style="font-weight: 700; font-size: 1rem; color: #10b981;">👤 {user_name}</div>
+                <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">{user_email}</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+                api_client.logout()
+                st.rerun()
+        
         st.markdown("---")
         
         # Enhanced Navigation

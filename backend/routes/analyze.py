@@ -7,6 +7,7 @@ from ..models import Document, Clause, ClauseResponse, ClauseUpdate
 from ..services.clause_extractor import clause_extractor
 from ..services.risk_analyzer import risk_analyzer
 from ..services.llm_service import llm_service
+from ..auth import get_current_user, User
 from typing import List
 import logging
 
@@ -14,7 +15,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/analyze/{document_id}", response_model=List[ClauseResponse])
-async def analyze_document(document_id: int, db: Session = Depends(get_db)):
+async def analyze_document(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Get document
     document = db.query(Document).filter(Document.id == document_id).first()
     if not document:
@@ -98,12 +99,12 @@ async def analyze_document(document_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal error during document analysis")
 
 @router.get("/clauses", response_model=List[ClauseResponse])
-async def get_all_clauses(db: Session = Depends(get_db)):
+async def get_all_clauses(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     clauses = db.query(Clause).all()
     return clauses
 
 @router.get("/clauses/{document_id}", response_model=List[ClauseResponse])
-async def get_document_clauses(document_id: int, db: Session = Depends(get_db)):
+async def get_document_clauses(document_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     clauses = db.query(Clause).filter(Clause.document_id == document_id).all()
     return clauses
 
@@ -111,7 +112,8 @@ async def get_document_clauses(document_id: int, db: Session = Depends(get_db)):
 async def update_clause(
     clause_id: int, 
     clause_update: ClauseUpdate, 
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     clause = db.query(Clause).filter(Clause.id == clause_id).first()
     if not clause:
@@ -127,7 +129,7 @@ async def update_clause(
     return clause
 
 @router.get("/documents", response_model=List[dict])
-async def get_all_documents(db: Session = Depends(get_db)):
+async def get_all_documents(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     documents = db.query(Document).all()
     result = []
     for doc in documents:
@@ -148,7 +150,7 @@ async def get_all_documents(db: Session = Depends(get_db)):
     return result
 
 @router.get("/analytics")
-async def get_analytics(db: Session = Depends(get_db)):
+async def get_analytics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     total_docs = db.query(Document).count()
     total_clauses = db.query(Clause).count()
     high_risk_clauses = db.query(Clause).filter(Clause.risk_level == "HIGH").count()

@@ -12,15 +12,34 @@ class APIClient:
         self.base_url = base_url
         self.timeout = 30
     
+    def _get_headers(self) -> Dict[str, str]:
+        """Get request headers with auth token if available"""
+        headers = {}
+        token = st.session_state.get("auth_token")
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        return headers
+    
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Optional[Dict[Any, Any]]:
-        """Make HTTP request with error handling"""
+        """Make HTTP request with error handling and auth"""
         url = f"{self.base_url}{endpoint}"
         
+        # Merge auth headers with any existing headers
+        headers = self._get_headers()
+        if "headers" in kwargs:
+            headers.update(kwargs.pop("headers"))
+        
         try:
-            response = requests.request(method, url, timeout=self.timeout, **kwargs)
+            response = requests.request(method, url, timeout=self.timeout, headers=headers, **kwargs)
             
-            if response.status_code == 200:
+            if response.status_code == 200 or response.status_code == 201:
                 return response.json()
+            elif response.status_code == 401:
+                # Token expired or invalid — clear auth state
+                st.session_state.pop("auth_token", None)
+                st.session_state.pop("current_user", None)
+                st.error("🔐 Session expired. Please log in again.")
+                return None
             elif response.status_code == 404:
                 st.error(f"Resource not found: {endpoint}")
                 return None
@@ -42,10 +61,57 @@ class APIClient:
             st.error(f"Unexpected error: {str(e)}")
             return None
     
+    # ──────────────────────────────────────────
+    # Authentication
+    # ──────────────────────────────────────────
+    
+    def register(self, email: str, password: str, full_name: str) -> Optional[Dict[str, Any]]:
+        """Register a new user"""
+        return self._make_request("POST", "/api/auth/register", json={
+            "email": email,
+            "password": password,
+            "full_name": full_name
+        })
+    
+    def login(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Login and get JWT token"""
+        result = self._make_request("POST", "/api/auth/login", json={
+            "email": email,
+            "password": password
+        })
+        if result and result.get("access_token"):
+            st.session_state["auth_token"] = result["access_token"]
+            # Fetch user profile
+            user = self.get_me()
+            if user:
+                st.session_state["current_user"] = user
+        return result
+    
+    def get_me(self) -> Optional[Dict[str, Any]]:
+        """Get current user profile"""
+        return self._make_request("GET", "/api/auth/me")
+    
+    def logout(self):
+        """Clear auth state"""
+        st.session_state.pop("auth_token", None)
+        st.session_state.pop("current_user", None)
+    
+    def is_authenticated(self) -> bool:
+        """Check if user is currently authenticated"""
+        return "auth_token" in st.session_state and st.session_state["auth_token"] is not None
+    
+    # ──────────────────────────────────────────
+    # Health
+    # ──────────────────────────────────────────
+    
     def check_health(self) -> bool:
         """Check API health"""
         result = self._make_request("GET", "/health")
         return result is not None
+    
+    # ──────────────────────────────────────────
+    # Documents & Clauses
+    # ──────────────────────────────────────────
     
     def upload_document(self, uploaded_file) -> Optional[Dict[str, Any]]:
         """Upload document file"""
@@ -55,11 +121,17 @@ class APIClient:
             response = requests.post(
                 f"{self.base_url}/api/upload", 
                 files=files, 
+                headers=self._get_headers(),
                 timeout=self.timeout
             )
             
             if response.status_code == 200:
                 return response.json()
+            elif response.status_code == 401:
+                st.session_state.pop("auth_token", None)
+                st.session_state.pop("current_user", None)
+                st.error("🔐 Session expired. Please log in again.")
+                return None
             else:
                 try:
                     error_detail = response.json().get('detail', 'Upload failed')

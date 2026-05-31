@@ -2066,12 +2066,95 @@ def render_search_page():
         - View AI-generated summaries
         """)
 
+# ──────────────────────────────────────────────
+# Authentication Gate
+# ──────────────────────────────────────────────
+
+def render_login_page():
+    """Render a premium login / register page"""
+    c = get_theme_colors()
+    
+    st.markdown(f"""
+    <div style="max-width: 480px; margin: 4rem auto; padding: 2.5rem; 
+                background: {c['card_bg']}; border-radius: 24px; 
+                border: 1px solid {c['border']}; 
+                box-shadow: 0 25px 50px rgba(0,0,0,0.15);">
+        <div style="text-align: center; margin-bottom: 2rem;">
+            <div style="font-size: 3rem; margin-bottom: 0.5rem;">⚖️</div>
+            <h2 style="background: linear-gradient(135deg, {c['primary']}, {c['secondary']}); 
+                       -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
+                       background-clip: text; font-size: 2rem; font-weight: 800; margin: 0;">
+                LegalSight Pro
+            </h2>
+            <p style="color: {c['text_secondary']}; margin-top: 0.5rem;">
+                AI-Powered Legal Document Analysis
+            </p>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Tab selector
+    if "auth_tab" not in st.session_state:
+        st.session_state.auth_tab = "Login"
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        tab = st.radio("", ["Login", "Register"], horizontal=True, key="auth_mode_selector", label_visibility="collapsed")
+        st.session_state.auth_tab = tab
+        
+        if st.session_state.auth_tab == "Login":
+            with st.form("login_form"):
+                st.markdown(f"#### 🔐 Sign In")
+                email = st.text_input("Email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password", placeholder="••••••••")
+                submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+                
+                if submitted:
+                    if not email or not password:
+                        st.error("Please fill in all fields.")
+                    else:
+                        result = api_client.login(email, password)
+                        if result and result.get("access_token"):
+                            st.success("✅ Login successful!")
+                            st.rerun()
+                        else:
+                            st.error("❌ Invalid email or password.")
+        
+        else:  # Register
+            with st.form("register_form"):
+                st.markdown(f"#### 📝 Create Account")
+                full_name = st.text_input("Full Name", placeholder="Jane Doe")
+                email = st.text_input("Email", placeholder="you@example.com")
+                password = st.text_input("Password", type="password", placeholder="Min 6 characters")
+                password_confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
+                submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
+                
+                if submitted:
+                    if not full_name or not email or not password:
+                        st.error("Please fill in all fields.")
+                    elif len(password) < 6:
+                        st.error("Password must be at least 6 characters.")
+                    elif password != password_confirm:
+                        st.error("Passwords do not match.")
+                    else:
+                        result = api_client.register(email, password, full_name)
+                        if result and result.get("id"):
+                            st.success("✅ Account created! You can now sign in.")
+                            st.session_state.auth_tab = "Login"
+                            st.rerun()
+                        # Error is already shown by api_client
+
 # Main App
 def main():
     # Get current page from URL
     query_params = st.query_params
     if 'page' in query_params:
         st.session_state.current_page = query_params['page']
+    
+    # ── Authentication Gate ──
+    if not api_client.is_authenticated():
+        render_login_page()
+        return
     
     # Render sidebar
     with st.sidebar:
@@ -2101,3 +2184,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

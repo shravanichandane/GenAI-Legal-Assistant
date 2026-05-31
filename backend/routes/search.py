@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from ..database import get_db
 from ..services.semantic_search import semantic_search
+from ..auth import get_current_user, User
 from typing import List
 
 router = APIRouter()
@@ -12,7 +13,8 @@ router = APIRouter()
 async def search_clauses(
     query: str = Query(..., description="Search query"),
     limit: int = Query(10, description="Maximum number of results"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     results = semantic_search.search_clauses(db, query, limit)
     

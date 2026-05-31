@@ -9,6 +9,7 @@ import PyPDF2
 import docx
 import io
 import logging
+from ..auth import get_current_user, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -16,7 +17,8 @@ router = APIRouter()
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     # Validate file type
     allowed_extensions = ('.pdf', '.docx', '.txt')
@@ -48,7 +50,7 @@ async def upload_document(
     # Create document record
     try:
         document_data = DocumentCreate(filename=file.filename, content=text_content)
-        db_document = Document(**document_data.dict())
+        db_document = Document(**document_data.dict(), user_id=current_user.id)
         db.add(db_document)
         db.commit()
         db.refresh(db_document)

@@ -16,6 +16,7 @@ from backend.routes.health import router as health_router
 from backend.routes.upload import router as upload_router
 from backend.routes.analyze import router as analyze_router
 from backend.routes.search import router as search_router
+from backend.routes.auth import router as auth_router
 
 # Create FastAPI app
 load_dotenv()
@@ -37,6 +38,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router, tags=["Health"])
+app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
 app.include_router(upload_router, prefix="/api", tags=["Upload"])
 app.include_router(analyze_router, prefix="/api", tags=["Analysis"])
 app.include_router(search_router, prefix="/api", tags=["Search"])
