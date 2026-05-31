@@ -1,0 +1,23 @@
+
+### requirements.txt
+
+# Backend dependencies
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy==2.0.36
+python-multipart==0.0.6
+PyPDF2==3.0.1
+python-docx==1.1.0
+# Optional AI libs (commented out for Python 3.13 compatibility)
+# langchain==0.0.350
+# langchain-google-genai==0.0.6
+google-generativeai==0.3.2
+pydantic==2.9.2
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+
+# Frontend dependencies (install separately on Python 3.13)
+# streamlit==1.28.1  # older Streamlit pins numpy<2; use a newer Streamlit on Py3.13
+# plotly==5.17.0
+pandas==2.2.3
+requests==2.31.0
