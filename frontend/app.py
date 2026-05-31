@@ -1343,7 +1343,7 @@ def render_login_page():
             if "auth_tab" not in st.session_state:
                 st.session_state.auth_tab = "Login"
             
-            tab = st.radio("", ["Login", "Register"], horizontal=True, key="auth_mode_selector", label_visibility="collapsed")
+            tab = st.radio("Authentication Mode", ["Login", "Register"], horizontal=True, key="auth_mode_selector", label_visibility="collapsed")
             st.session_state.auth_tab = tab
             
             if st.session_state.auth_tab == "Login":
