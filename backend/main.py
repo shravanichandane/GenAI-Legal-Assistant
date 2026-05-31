@@ -28,9 +28,16 @@ app = FastAPI(
 )
 
 # Configure CORS
+import os
+origins = [
+    "http://localhost:8501",  # Local Streamlit frontend
+]
+if os.environ.get("ALLOWED_ORIGIN"):
+    origins.append(os.environ.get("ALLOWED_ORIGIN"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8501"],  # Restricted to Streamlit frontend
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

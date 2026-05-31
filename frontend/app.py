@@ -1,5 +1,9 @@
 import streamlit as st
 import pandas as pd
+import json
+import traceback
+import plotly.express as px
+from datetime import datetime, timedelta
 from api_client import api_client
 from components.sidebar import render_sidebar
 from components.charts import (
@@ -13,780 +17,8 @@ from components.charts import (
     create_word_cloud_like,
 )
 from components.clause_editor import render_clause_editor
+from components.theme import apply_elite_theme
 import time
-
-# Enhanced theme helpers
-def get_theme_colors():
-    mode = st.session_state.get("theme", "Dark")
-    if mode == "Light":
-        return {
-            'background': '#f8fafc',
-            'surface': '#eef2f7',
-            'card_bg': '#ffffff',
-            'border': '#e2e8f0',
-            'text': '#0f172a',
-            'text_secondary': '#475569',
-            'primary': '#3b82f6',
-            'secondary': '#8b5cf6',
-            'accent': '#06b6d4',
-            'risk_high': '#ef4444',
-            'risk_medium': '#f59e0b',
-            'risk_low': '#10b981',
-        }
-    return {
-        'background': '#0f172a',
-        'surface': '#1e293b',
-        'card_bg': '#0b1220',
-        'border': '#334155',
-        'text': '#f1f5f9',
-        'text_secondary': '#cbd5e1',
-        'primary': '#3b82f6',
-        'secondary': '#8b5cf6',
-        'accent': '#06b6d4',
-        'risk_high': '#ef4444',
-        'risk_medium': '#f59e0b',
-        'risk_low': '#10b981',
-    }
-
-def apply_enhanced_theme():
-    c = get_theme_colors()
-    st.markdown(f"""
-<style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-        @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css');
-        
-        /* Global Styles */
-        .main {{
-            background: linear-gradient(135deg, {c['background']} 0%, {c['surface']} 100%);
-            min-height: 100vh;
-            font-family: 'Inter', sans-serif;
-        }}
-        
-        /* Enhanced Headers and Subheaders */
-        .page-header {{
-            background: linear-gradient(135deg, {c['surface']} 0%, {c['card_bg']} 100%);
-            padding: 2rem;
-            border-radius: 20px;
-            margin-bottom: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            border-left: 5px solid {c['primary']};
-            position: relative;
-            overflow: hidden;
-        }}
-        
-        .page-header::before {{
-            content: '';
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(45deg, {c['primary']}20, {c['secondary']}20);
-            border-radius: 50%;
-            transform: translate(30px, -30px);
-        }}
-        
-        .page-header h1 {{
-            font-size: 2.5rem;
-            font-weight: 800;
-            margin: 0 0 0.5rem 0;
-            background: linear-gradient(135deg, {c['primary']}, {c['secondary']});
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            position: relative;
-            z-index: 2;
-        }}
-        
-        .page-header p {{
-            font-size: 1.2rem;
-            color: {c['text_secondary']};
-            margin: 0;
-            position: relative;
-            z-index: 2;
-        }}
-        
-        /* Section Headers */
-        .section-header {{
-            background: linear-gradient(135deg, {c['card_bg']}, {c['surface']});
-            padding: 1.5rem;
-            border-radius: 15px;
-            margin: 1.5rem 0 1rem 0;
-            border-left: 4px solid {c['accent']};
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            position: relative;
-        }}
-        
-        .section-header h2 {{
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin: 0 0 0.5rem 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .section-header h3 {{
-            font-size: 1.4rem;
-            font-weight: 600;
-            margin: 0 0 0.5rem 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .section-header h4 {{
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin: 0 0 0.5rem 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .section-header p {{
-            font-size: 1rem;
-            color: {c['text_secondary']};
-            margin: 0;
-        }}
-        
-        /* Subsection Headers */
-        .subsection-header {{
-            background: {c['card_bg']};
-            padding: 1rem 1.5rem;
-            border-radius: 10px;
-            margin: 1rem 0;
-            border-left: 3px solid {c['primary']};
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.05);
-        }}
-        
-        .subsection-header h3 {{
-            font-size: 1.3rem;
-            font-weight: 600;
-            margin: 0 0 0.3rem 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .subsection-header h4 {{
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin: 0 0 0.3rem 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .subsection-header p {{
-            font-size: 0.95rem;
-            color: {c['text_secondary']};
-            margin: 0;
-        }}
-        
-        /* Card Headers */
-        .card-header {{
-            background: linear-gradient(135deg, {c['primary']}10, {c['secondary']}10);
-            padding: 1rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-            border-left: 3px solid {c['primary']};
-        }}
-        
-        .card-header h3 {{
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin: 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        .card-header h4 {{
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin: 0;
-            color: {c['text']};
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }}
-        
-        /* Icon Styling for Headers */
-        .header-icon {{
-            font-size: 1.2em;
-            color: {c['primary']};
-            margin-right: 0.5rem;
-        }}
-        
-        .subheader-icon {{
-            font-size: 1em;
-            color: {c['accent']};
-            margin-right: 0.5rem;
-        }}
-        
-        /* Responsive Headers */
-        @media (max-width: 768px) {{
-            .page-header h1 {{
-                font-size: 2rem;
-            }}
-            .section-header h2 {{
-                font-size: 1.5rem;
-            }}
-            .section-header h3 {{
-                font-size: 1.2rem;
-            }}
-        }}
-        
-        /* Navigation removed - using sidebar only */
-        
-        /* Enhanced Hero Section */
-        .hero-section {{
-            padding: 5rem 2rem;
-        text-align: center;
-            background: linear-gradient(135deg, {c['surface']} 0%, {c['card_bg']} 50%, {c['background']} 100%);
-            border-radius: 25px;
-            margin: 2rem 0;
-        position: relative;
-        overflow: hidden;
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-        }}
-        
-        .hero-section::before {{
-        content: '';
-        position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle at 30% 40%, rgba(0, 212, 255, 0.15) 0%, transparent 50%), 
-                        radial-gradient(circle at 70% 60%, rgba(124, 58, 237, 0.1) 0%, transparent 50%), 
-                        radial-gradient(circle at 90% 10%, rgba(16, 185, 129, 0.1) 0%, transparent 50%);
-            animation: floatBackground 20s ease-in-out infinite;
-        }}
-        
-        @keyframes floatBackground {{
-            0%, 100% {{ transform: rotate(0deg) scale(1); opacity: 0.6; }}
-            25% {{ transform: rotate(90deg) scale(1.1); opacity: 0.8; }}
-            50% {{ transform: rotate(180deg) scale(1.05); opacity: 0.7; }}
-            75% {{ transform: rotate(270deg) scale(1.15); opacity: 0.9; }}
-        }}
-        
-        /* Floating Icons */
-        .floating-icons {{
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        }}
-        
-        .floating-icon {{
-            position: absolute;
-            font-size: 1.5rem;
-            opacity: 0.1;
-            animation: float 15s ease-in-out infinite;
-        }}
-        
-        .floating-icon:nth-child(1) {{ top: 10%; left: 15%; animation-delay: 0s; }}
-        .floating-icon:nth-child(2) {{ top: 20%; right: 20%; animation-delay: -5s; }}
-        .floating-icon:nth-child(3) {{ bottom: 30%; left: 10%; animation-delay: -10s; }}
-        .floating-icon:nth-child(4) {{ bottom: 15%; right: 15%; animation-delay: -7s; }}
-        
-        @keyframes float {{
-            0%, 100% {{ transform: translateY(0px) rotate(0deg); opacity: 0.1; }}
-            25% {{ transform: translateY(-20px) rotate(90deg); opacity: 0.2; }}
-            50% {{ transform: translateY(-40px) rotate(180deg); opacity: 0.15; }}
-            75% {{ transform: translateY(-20px) rotate(270deg); opacity: 0.2; }}
-        }}
-        
-        /* Enhanced Title */
-        .hero-title {{
-            font-size: 4rem;
-            font-weight: 800;
-            margin-bottom: 1rem;
-            background: linear-gradient(45deg, {c['primary']}, {c['secondary']}, {c['accent']}, {c['primary']});
-            background-size: 400% 400%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            animation: gradientShift 4s ease-in-out infinite;
-            position: relative;
-            z-index: 2;
-        }}
-        
-        @keyframes gradientShift {{
-            0% {{ background-position: 0% 50%; }}
-            50% {{ background-position: 100% 50%; }}
-            100% {{ background-position: 0% 50%; }}
-        }}
-        
-        /* Typewriter Effect */
-        .hero-subtitle {{
-            font-size: 1.4rem;
-            color: {c['text_secondary']};
-            margin-bottom: 2rem;
-            line-height: 1.6;
-            position: relative;
-            z-index: 2;
-        }}
-        
-        .typewriter {{
-            overflow: hidden;
-            border-right: 3px solid {c['primary']};
-            white-space: nowrap;
-            animation: typewriter 4s steps(40, end), blink-cursor 0.8s step-end infinite;
-        }}
-        
-        @keyframes typewriter {{
-            from {{ width: 0; }}
-            to {{ width: 100%; }}
-        }}
-        
-        @keyframes blink-cursor {{
-            50% {{ border-color: transparent; }}
-        }}
-        
-        /* Enhanced CTA Button */
-        .cta-button {{
-            background: linear-gradient(135deg, {c['primary']} 0%, {c['secondary']} 100%);
-            color: white;
-            padding: 1.2rem 3rem;
-            border: none;
-            border-radius: 50px;
-            font-size: 1.2rem;
-        font-weight: 700;
-            cursor: pointer;
-            transition: all 0.4s ease;
-            position: relative;
-            z-index: 2;
-        margin: 2rem 0;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-        }}
-        
-        .cta-button:hover {{
-            transform: translateY(-5px) scale(1.05);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
-        }}
-        
-        /* Feature Cards */
-        .feature-grid {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 2rem;
-            margin: 3rem 0;
-        }}
-        
-        .feature-card {{
-            background: {c['card_bg']};
-            padding: 2.5rem;
-            border-radius: 20px;
-            border: 1px solid {c['border']};
-            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-            transition: all 0.4s ease;
-        position: relative;
-        overflow: hidden;
-            cursor: pointer;
-        }}
-    
-        .feature-card::before {{
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-            width: 100%;
-            height: 5px;
-            background: linear-gradient(135deg, {c['primary']} 0%, {c['secondary']} 100%);
-            transform: scaleX(0);
-            transition: transform 0.4s ease;
-        }}
-        
-        .feature-card:hover::before {{
-            transform: scaleX(1);
-        }}
-        
-        .feature-card:hover {{
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
-            border-color: {c['primary']};
-        }}
-        
-        .feature-icon {{
-            font-size: 3.5rem;
-            margin-bottom: 1.5rem;
-            display: block;
-            color: {c['primary']};
-            transition: all 0.3s ease;
-        }}
-        
-        .feature-card:hover .feature-icon {{
-            animation: bounce 0.6s ease-in-out;
-            color: {c['secondary']};
-        }}
-        
-        @keyframes bounce {{
-            0%, 20%, 50%, 80%, 100% {{ transform: translateY(0); }}
-            40% {{ transform: translateY(-15px); }}
-            60% {{ transform: translateY(-8px); }}
-        }}
-        
-        .feature-title {{
-        font-weight: 600;
-            font-size: 1.3rem;
-            color: {c['text']};
-            margin-bottom: 1rem;
-        }}
-        
-        .feature-description {{
-            color: {c['text_secondary']};
-            font-size: 1rem;
-        line-height: 1.6;
-        }}
-        
-        /* Universal Styling */
-        h1, h2, h3, h4, h5, h6, .st-title, .st-header, .st-subheader, .st-caption {{
-            color: {c['text']} !important;
-            font-family: 'Inter', sans-serif !important;
-        }}
-        
-        .stButton > button {{
-            background: linear-gradient(135deg, {c['primary']} 0%, {c['secondary']} 100%);
-        color: white;
-        border: none;
-            border-radius: 8px;
-            padding: 0.5rem 1rem;
-        font-weight: 500;
-            transition: all 0.3s ease;
-        }}
-        
-        .stButton > button:hover {{
-        transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-        }}
-        
-        .stCard {{
-            background: {c['card_bg']};
-            border: 1px solid {c['border']};
-        border-radius: 12px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
-        }}
-        
-        .stContainer {{
-            background: {c['surface']};
-            border-radius: 15px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        }}
-        
-        .stInput > div > div > input {{
-            background: {c['card_bg']};
-            color: {c['text']};
-            border: 1px solid {c['border']};
-            border-radius: 8px;
-        }}
-        
-        .stSlider > div > div > div > div {{
-            background: {c['primary']};
-        }}
-        
-        .stCheckbox > div > div > div {{
-            background: {c['card_bg']};
-            border: 1px solid {c['border']};
-        }}
-        
-        .stRadio > div > div > div {{
-            background: {c['card_bg']};
-            border: 1px solid {c['border']};
-        }}
-        
-        .stProgress > div > div > div {{
-            background: linear-gradient(135deg, {c['primary']} 0%, {c['secondary']} 100%);
-        }}
-        
-        .stSidebar {{
-            background: linear-gradient(135deg, {c['surface']} 0%, {c['card_bg']} 100%);
-        }}
-        
-        .stFooter {{
-            background: {c['surface']};
-            color: {c['text_secondary']};
-        text-align: center;
-            padding: 1rem;
-        }}
-        
-        /* Responsive Design */
-        @media (max-width: 768px) {{
-            .hero-title {{ font-size: 2.5rem; }}
-            .hero-subtitle {{ font-size: 1.1rem; }}
-            .feature-grid {{ grid-template-columns: 1fr; }}
-        }}
-        
-        /* Dark/Light Mode Transition */
-        * {{ transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease; }}
-        
-        /* Search Results */
-        .search-result {{
-            background: {c['card_bg']};
-            padding: 1.5rem;
-            border-radius: 12px;
-            margin: 1rem 0;
-            border-left: 4px solid {c['primary']};
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
-        }}
-        .search-result:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }}
-        .clause-text {{
-            background: {c['surface']};
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            border-left: 3px solid {c['primary']};
-            font-style: italic;
-            line-height: 1.6;
-        }}
-        .ai-summary {{
-            background: linear-gradient(135deg, {c['primary']}10, {c['secondary']}10);
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            border: 1px solid {c['primary']}30;
-        font-weight: 500;
-        }}
-        .result-metrics {{
-            display: flex;
-        gap: 0.5rem;
-            margin-top: 1rem;
-            flex-wrap: wrap;
-        }}
-        .risk-badge, .relevance-badge {{
-            display: inline-block;
-            font-weight: 600;
-            font-size: 0.8rem;
-            border-radius: 20px;
-            padding: 0.3rem 0.8rem;
-        }}
-        .page-header {{
-            text-align: center;
-            margin-bottom: 2rem;
-            padding: 2rem;
-            background: linear-gradient(135deg, {c['surface']}, {c['card_bg']});
-            border-radius: 20px;
-            border: 1px solid {c['border']};
-        }}
-        .page-header h1 {{
-            font-size: 2.5rem;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(45deg, {c['primary']}, {c['secondary']});
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }}
-        .page-header p {{
-            color: {c['text_secondary']};
-            font-size: 1.1rem;
-        }}
-        
-        /* Upload Page Styling */
-        .feature-highlight {{
-            background: {c['card_bg']};
-            padding: 1.5rem;
-        border-radius: 12px;
-            margin: 1rem 0;
-            border: 1px solid {c['border']};
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
-        }}
-        .feature-highlight:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }}
-        .feature-highlight h4 {{
-            color: {c['primary']};
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
-        }}
-        .clause-preview {{
-            background: {c['surface']};
-            padding: 1rem;
-            border-radius: 8px;
-            margin: 0.5rem 0;
-            border-left: 3px solid {c['primary']};
-        }}
-        .clause-metrics {{
-            margin-top: 0.5rem;
-        }}
-        .next-steps-section {{
-            background: linear-gradient(135deg, {c['primary']}10, {c['secondary']}10);
-            padding: 2rem;
-            border-radius: 15px;
-            margin: 2rem 0;
-            border: 1px solid {c['primary']}30;
-        }}
-        .upload-instructions {{
-            background: {c['card_bg']};
-            padding: 2rem;
-            border-radius: 15px;
-            margin: 1rem 0;
-            border: 1px solid {c['border']};
-        }}
-        
-        /* Get Started Button Styling */
-        .stButton > button {{
-            background: linear-gradient(135deg, {c['primary']} 0%, {c['secondary']} 100%);
-            color: white;
-            border: none;
-            border-radius: 50px;
-            padding: 1.2rem 3rem;
-            font-size: 1.2rem;
-            font-weight: 700;
-            cursor: pointer;
-            transition: all 0.4s ease;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-            position: relative;
-        }}
-        .stButton > button:hover {{
-            transform: translateY(-5px) scale(1.05);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
-        }}
-        .stButton > button:active {{
-            transform: translateY(-2px) scale(1.02);
-        }}
-        
-        /* Plain English Styling */
-        .plain-english-box {{
-            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-            padding: 1.5rem;
-        border-radius: 12px;
-            border-left: 4px solid #0ea5e9;
-            margin: 1rem 0;
-            box-shadow: 0 4px 15px rgba(14, 165, 233, 0.1);
-            color: {c['text']} !important;
-        }}
-        .plain-english-box p {{
-            color: {c['text']} !important;
-            margin: 0.5rem 0;
-        }}
-        .technical-details {{
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-            padding: 1.5rem;
-        border-radius: 12px;
-            border-left: 4px solid #64748b;
-            margin: 1rem 0;
-            box-shadow: 0 4px 15px rgba(100, 116, 139, 0.1);
-            color: {c['text']} !important;
-        }}
-        .technical-details p {{
-            color: {c['text']} !important;
-            margin: 0.5rem 0;
-        }}
-        .clause-text-box {{
-            background: linear-gradient(135deg, #fefce8 0%, #fef3c7 100%);
-            padding: 1.5rem;
-        border-radius: 12px;
-            border-left: 4px solid #eab308;
-            margin: 1rem 0;
-            box-shadow: 0 4px 15px rgba(234, 179, 8, 0.1);
-            font-family: 'Courier New', monospace;
-            line-height: 1.6;
-            color: {c['text']} !important;
-        }}
-        .clause-text-box p {{
-            color: {c['text']} !important;
-            margin: 0.5rem 0;
-        }}
-        .ai-summary-box {{
-            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-            padding: 1.5rem;
-            border-radius: 12px;
-            border-left: 4px solid #22c55e;
-            margin: 1rem 0;
-            box-shadow: 0 4px 15px rgba(34, 197, 94, 0.1);
-            color: {c['text']} !important;
-        }}
-        .ai-summary-box p {{
-            color: {c['text']} !important;
-            margin: 0.5rem 0;
-        }}
-        .risk-analysis-box {{
-            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-            padding: 1.5rem;
-            border-radius: 12px;
-            border-left: 4px solid #ef4444;
-            margin: 1rem 0;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.1);
-            color: {c['text']} !important;
-        }}
-        .risk-analysis-box p {{
-            color: {c['text']} !important;
-            margin: 0.5rem 0;
-        }}
-        .dashboard-metric {{
-            background: {c['card_bg']};
-            padding: 1.5rem;
-            border-radius: 12px;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-        transition: all 0.3s ease;
-        }}
-        .dashboard-metric:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        }}
-        
-        /* Ensure text visibility in all modes */
-        .stMarkdown {{
-            color: {c['text']} !important;
-        }}
-        .stMarkdown p {{
-            color: {c['text']} !important;
-        }}
-        .stMarkdown h1, .stMarkdown h2, .stMarkdown h3, .stMarkdown h4, .stMarkdown h5, .stMarkdown h6 {{
-            color: {c['text']} !important;
-        }}
-        .stMarkdown strong {{
-            color: {c['text']} !important;
-        }}
-        .stMarkdown em {{
-            color: {c['text']} !important;
-        }}
-        
-        /* Streamlit widget text visibility */
-        .stSelectbox label {{
-            color: {c['text']} !important;
-        }}
-        .stTextInput label {{
-            color: {c['text']} !important;
-        }}
-        .stButton label {{
-            color: {c['text']} !important;
-        }}
-        
-        /* Ensure expander content is visible */
-        .streamlit-expanderContent {{
-            color: {c['text']} !important;
-        }}
-        .streamlit-expanderContent p {{
-            color: {c['text']} !important;
-        }}
-        .streamlit-expanderContent h1, .streamlit-expanderContent h2, .streamlit-expanderContent h3, .streamlit-expanderContent h4, .streamlit-expanderContent h5, .streamlit-expanderContent h6 {{
-            color: {c['text']} !important;
-        }}
-</style>
-""", unsafe_allow_html=True)
 
 # Page configuration
 st.set_page_config(
@@ -796,13 +28,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state
 from datetime import date
 
 if "current_page" not in st.session_state:
     st.session_state.current_page = "Home"
 if "theme" not in st.session_state:
-    st.session_state.theme = "Dark"
+    st.session_state.theme = "Light"
 if "filters" not in st.session_state:
     st.session_state.filters = {
         "risk_levels": ["LOW", "MEDIUM", "HIGH"],
@@ -813,14 +44,11 @@ if "filters" not in st.session_state:
 if "api_status" not in st.session_state:
     st.session_state.api_status = False
 
+apply_elite_theme()
+
 # Ensure date_range is never an empty list or None
 if st.session_state.filters.get("date_range") == [] or st.session_state.filters.get("date_range") is None:
     st.session_state.filters["date_range"] = date.today()
-
-# Apply theme
-apply_enhanced_theme()
-
-# API client loaded
 
 # Navigation removed - using sidebar only
 
@@ -854,64 +82,72 @@ def fetch_analytics():
 
 # Page Functions
 def render_home_page():
-    c = get_theme_colors()
+    # Hero Section
+    col_hero, col_img = st.columns([3, 2])
+    with col_hero:
+        st.markdown("<h1 style='font-size: 3.5rem; font-weight: 800; color: #1E3A8A; margin-bottom: 0.5rem; line-height: 1.1;'>Elevate Your Legal Review.</h1>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 1.2rem; color: #334155; margin-bottom: 2rem; max-width: 600px;'>LegalSight Pro is an elite enterprise platform that instantly analyzes contracts, identifies risks, and extracts critical clauses with pinpoint accuracy.</p>", unsafe_allow_html=True)
+        
+        col_btn1, col_btn2 = st.columns([1, 2])
+        with col_btn1:
+            if st.button("🚀 Upload Document", type="primary", use_container_width=True):
+                st.session_state.current_page = "Upload"
+                st.rerun()
+        with col_btn2:
+            if st.button("View Sample Dashboard", use_container_width=True):
+                st.session_state.current_page = "Dashboard"
+                st.rerun()
+                
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
     
-    st.markdown(f"""
-    <div class="hero-section">
-        <div class="floating-icons">
-            <div class="floating-icon">⚖️</div>
-            <div class="floating-icon">📊</div>
-            <div class="floating-icon">🔍</div>
-            <div class="floating-icon">📝</div>
-        </div>
-        <h1 class="hero-title">Legal Document Review Assistant</h1>
-        <p class="hero-subtitle typewriter">AI-Powered Legal Document Analysis & Review Platform</p>
-        <!-- Get Started button will be added below -->
-    </div>
-    """, unsafe_allow_html=True)
+    # Asymmetric Grid
+    st.markdown("<h2 style='font-size: 1.5rem; color: #0f172a; margin-bottom: 1.5rem;'>Platform Capabilities</h2>", unsafe_allow_html=True)
     
-    # Get Started Button
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown('''
+            <div class="elite-card">
+                <div style="font-size: 2rem; color: #1E3A8A; margin-bottom: 1rem;">🧠</div>
+                <h3 style="color: #0f172a; margin-top: 0;">Context-Aware AI Analysis</h3>
+                <p style="color: #475569;">Our proprietary legal models read beyond keywords. They understand the semantic context of your agreements, identifying subtle indemnification risks and buried liabilities that standard tools miss.</p>
+            </div>
+        ''', unsafe_allow_html=True)
     with col2:
-        if st.button("🚀 Get Started", type="primary", use_container_width=True, key="get_started_btn"):
-            st.session_state.current_page = "Upload"
-            st.rerun()
-    
-    # Feature Cards
-    st.markdown("""
-    <div class="feature-grid">
-        <div class="feature-card">
-            <div class="feature-icon">🤖</div>
-            <h3 class="feature-title">AI-Powered Analysis</h3>
-            <p class="feature-description">Advanced AI algorithms analyze legal documents for risk assessment, clause identification, and compliance checking.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <h3 class="feature-title">Interactive Dashboard</h3>
-            <p class="feature-description">Comprehensive analytics dashboard with visualizations, trends, and insights for better decision making.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">🔍</div>
-            <h3 class="feature-title">Smart Search</h3>
-            <p class="feature-description">Semantic search capabilities to find relevant clauses, documents, and legal precedents quickly.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">📝</div>
-            <h3 class="feature-title">Clause Editor</h3>
-            <p class="feature-description">Interactive clause editing with AI suggestions, risk highlighting, and collaborative review features.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">⚡</div>
-            <h3 class="feature-title">Real-time Processing</h3>
-            <p class="feature-description">Fast document processing with real-time updates and instant feedback on document analysis.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon">🔒</div>
-            <h3 class="feature-title">Secure & Compliant</h3>
-            <p class="feature-description">Enterprise-grade security with compliance features for sensitive legal document handling.</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+        st.markdown('''
+            <div class="elite-card">
+                <div style="font-size: 2rem; color: #1E3A8A; margin-bottom: 1rem;">⚡</div>
+                <h3 style="color: #0f172a; margin-top: 0;">Real-Time Processing</h3>
+                <p style="color: #475569;">Upload 100-page MSAs and receive comprehensive risk breakdowns in seconds, not hours.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+        
+    st.markdown("<br>", unsafe_allow_html=True)
+        
+    col3, col4, col5 = st.columns(3)
+    with col3:
+        st.markdown('''
+            <div class="elite-card">
+                <div style="font-size: 2rem; color: #1E3A8A; margin-bottom: 1rem;">📊</div>
+                <h3 style="color: #0f172a; margin-top: 0;">Interactive Dashboard</h3>
+                <p style="color: #475569;">Visualize risk distribution across your entire portfolio with interactive charts and KPI metrics.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+    with col4:
+        st.markdown('''
+            <div class="elite-card">
+                <div style="font-size: 2rem; color: #1E3A8A; margin-bottom: 1rem;">🔍</div>
+                <h3 style="color: #0f172a; margin-top: 0;">Smart Search</h3>
+                <p style="color: #475569;">Instantly locate specific obligations or force majeure clauses across thousands of documents.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+    with col5:
+        st.markdown('''
+            <div class="elite-card">
+                <div style="font-size: 2rem; color: #1E3A8A; margin-bottom: 1rem;">🛡️</div>
+                <h3 style="color: #0f172a; margin-top: 0;">Bank-Grade Security</h3>
+                <p style="color: #475569;">SOC2 compliant infrastructure ensures your highly sensitive legal data remains strictly confidential.</p>
+            </div>
+        ''', unsafe_allow_html=True)
 
 def render_dashboard_page():
     st.markdown("""
@@ -927,7 +163,18 @@ def render_dashboard_page():
     clauses = fetch_clauses()
     
     if not documents:
-        st.info("📊 No data available. Upload documents to see analytics.")
+        st.markdown('''
+            <div style="text-align: center; padding: 4rem 2rem; background: white; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 2rem;">
+                <div style="font-size: 3rem; color: #94a3b8; margin-bottom: 1rem;">📄</div>
+                <h3 style="color: #0f172a; margin-bottom: 0.5rem; font-size: 1.5rem;">No Documents Analyzed Yet</h3>
+                <p style="color: #64748b; margin-bottom: 1.5rem;">Upload your first legal document to unlock the Interactive Analytics Dashboard.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("🚀 Upload First Document", type="primary", use_container_width=True, key=f"empty_upload_render_dashboard_page"):
+                st.session_state.current_page = "Upload"
+                st.rerun()
         return
     
     # Check if clauses need to be extracted
@@ -973,7 +220,7 @@ def render_dashboard_page():
         return
     
     # Enhanced KPI Cards with animations
-    st.markdown("### 📈 Key Performance Indicators")
+    st.markdown("### 📈 Executive Overview")
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
@@ -1612,11 +859,12 @@ def render_upload_page():
                     
                     with st.expander(f"🔍 {clause.get('clause_type', 'Unknown')} - Risk: {clause.get('risk_level', 'Unknown')}"):
                         st.markdown(f"""
-                        <div class="clause-preview">
-                            <p><strong>Document:</strong> {clause.get('document_filename', 'Unknown')}</p>
-                            <p><strong>Summary:</strong> {clause.get('summary', 'No summary available')}</p>
-                            <div class="clause-metrics">
-                                <span class="risk-badge" style="background-color: {risk_color}20; color: {risk_color}; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem;">
+                        <div class="clause-preview" style="padding: 1rem;">
+                            <p style="color: #64748b; font-size: 0.9rem;"><strong>Document:</strong> {clause.get('document_filename', 'Unknown')}</p>
+                            <div class="legal-serif" style="margin: 1rem 0;">{clause.get('clause_text', 'Text not available in preview')}</div>
+                            <p style="color: #475569;"><strong>Summary:</strong> {clause.get('summary', 'No summary available')}</p>
+                            <div class="clause-metrics" style="margin-top: 1rem;">
+                                <span class="risk-badge" style="background-color: {risk_color}15; color: {risk_color}; padding: 0.4rem 1rem; border-radius: 99px; font-weight: 600; font-size: 0.85rem; border: 1px solid {risk_color}40;">
                                     Risk: {clause.get('risk_level', 'Unknown')} ({clause.get('risk_score', 'N/A')})
                                 </span>
                             </div>
@@ -1702,7 +950,18 @@ def render_clause_review_page():
     # Fetch documents
     documents = fetch_documents()
     if not documents:
-        st.info("📝 No documents available for review. Upload documents first.")
+        st.markdown('''
+            <div style="text-align: center; padding: 4rem 2rem; background: white; border-radius: 12px; border: 1px dashed #cbd5e1; margin-top: 2rem;">
+                <div style="font-size: 3rem; color: #94a3b8; margin-bottom: 1rem;">📄</div>
+                <h3 style="color: #0f172a; margin-bottom: 0.5rem; font-size: 1.5rem;">Clause Library Empty</h3>
+                <p style="color: #64748b; margin-bottom: 1.5rem;">Upload a contract or agreement to extract and review clauses.</p>
+            </div>
+        ''', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("🚀 Upload First Document", type="primary", use_container_width=True, key=f"empty_upload_render_clause_review_page"):
+                st.session_state.current_page = "Upload"
+                st.rerun()
         return
     
     # Document selection and filters
@@ -2072,77 +1331,61 @@ def render_search_page():
 
 def render_login_page():
     """Render a premium login / register page"""
-    c = get_theme_colors()
-    
-    st.markdown(f"""
-    <div style="max-width: 480px; margin: 4rem auto; padding: 2.5rem; 
-                background: {c['card_bg']}; border-radius: 24px; 
-                border: 1px solid {c['border']}; 
-                box-shadow: 0 25px 50px rgba(0,0,0,0.15);">
-        <div style="text-align: center; margin-bottom: 2rem;">
-            <div style="font-size: 3rem; margin-bottom: 0.5rem;">⚖️</div>
-            <h2 style="background: linear-gradient(135deg, {c['primary']}, {c['secondary']}); 
-                       -webkit-background-clip: text; -webkit-text-fill-color: transparent; 
-                       background-clip: text; font-size: 2rem; font-weight: 800; margin: 0;">
-                LegalSight Pro
-            </h2>
-            <p style="color: {c['text_secondary']}; margin-top: 0.5rem;">
-                AI-Powered Legal Document Analysis
-            </p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Tab selector
-    if "auth_tab" not in st.session_state:
-        st.session_state.auth_tab = "Login"
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        tab = st.radio("", ["Login", "Register"], horizontal=True, key="auth_mode_selector", label_visibility="collapsed")
-        st.session_state.auth_tab = tab
-        
-        if st.session_state.auth_tab == "Login":
-            with st.form("login_form"):
-                st.markdown(f"#### 🔐 Sign In")
-                email = st.text_input("Email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", placeholder="••••••••")
-                submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
-                
-                if submitted:
-                    if not email or not password:
-                        st.error("Please fill in all fields.")
-                    else:
-                        result = api_client.login(email, password)
-                        if result and result.get("access_token"):
-                            st.success("✅ Login successful!")
-                            st.rerun()
+        with st.container(border=True):
+            st.markdown("<h1 style='text-align: center; color: #2563eb;'>⚖️ LegalSight Pro</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: #64748b;'>Enterprise Legal Document Analysis</p>", unsafe_allow_html=True)
+            st.divider()
+            
+            # Tab selector
+            if "auth_tab" not in st.session_state:
+                st.session_state.auth_tab = "Login"
+            
+            tab = st.radio("", ["Login", "Register"], horizontal=True, key="auth_mode_selector", label_visibility="collapsed")
+            st.session_state.auth_tab = tab
+            
+            if st.session_state.auth_tab == "Login":
+                with st.form("login_form"):
+                    st.markdown("#### 🔐 Sign In")
+                    email = st.text_input("Email", placeholder="you@example.com")
+                    password = st.text_input("Password", type="password", placeholder="••••••••")
+                    submitted = st.form_submit_button("Sign In", use_container_width=True, type="primary")
+                    
+                    if submitted:
+                        if not email or not password:
+                            st.error("Please fill in all fields.")
                         else:
-                            st.error("❌ Invalid email or password.")
-        
-        else:  # Register
-            with st.form("register_form"):
-                st.markdown(f"#### 📝 Create Account")
-                full_name = st.text_input("Full Name", placeholder="Jane Doe")
-                email = st.text_input("Email", placeholder="you@example.com")
-                password = st.text_input("Password", type="password", placeholder="Min 6 characters")
-                password_confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
-                submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
-                
-                if submitted:
-                    if not full_name or not email or not password:
-                        st.error("Please fill in all fields.")
-                    elif len(password) < 6:
-                        st.error("Password must be at least 6 characters.")
-                    elif password != password_confirm:
-                        st.error("Passwords do not match.")
-                    else:
-                        result = api_client.register(email, password, full_name)
-                        if result and result.get("id"):
-                            st.success("✅ Account created! You can now sign in.")
-                            st.session_state.auth_tab = "Login"
-                            st.rerun()
-                        # Error is already shown by api_client
+                            result = api_client.login(email, password)
+                            if result and result.get("access_token"):
+                                st.success("✅ Login successful!")
+                                st.rerun()
+                            else:
+                                st.error("❌ Invalid email or password.")
+            
+            else:  # Register
+                with st.form("register_form"):
+                    st.markdown("#### 📝 Create Account")
+                    full_name = st.text_input("Full Name", placeholder="Jane Doe")
+                    email = st.text_input("Email", placeholder="you@example.com")
+                    password = st.text_input("Password", type="password", placeholder="Min 6 characters")
+                    password_confirm = st.text_input("Confirm Password", type="password", placeholder="••••••••")
+                    submitted = st.form_submit_button("Create Account", use_container_width=True, type="primary")
+                    
+                    if submitted:
+                        if not full_name or not email or not password:
+                            st.error("Please fill in all fields.")
+                        elif len(password) < 6:
+                            st.error("Password must be at least 6 characters.")
+                        elif password != password_confirm:
+                            st.error("Passwords do not match.")
+                        else:
+                            result = api_client.register(email, password, full_name)
+                            if result and result.get("id"):
+                                st.success("✅ Account created! You can now sign in.")
+                                st.session_state.auth_tab = "Login"
+                                st.rerun()
 
 # Main App
 def main():

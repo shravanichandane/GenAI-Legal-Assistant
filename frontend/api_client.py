@@ -8,7 +8,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class APIClient:
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = None):
+        import os
+        if base_url is None:
+            try:
+                # Try Streamlit secrets first, then environment variable, then localhost
+                base_url = st.secrets.get("API_URL", os.environ.get("API_URL", "http://localhost:8000"))
+            except Exception:
+                # Fallback if st.secrets is not available
+                base_url = os.environ.get("API_URL", "http://localhost:8000")
         self.base_url = base_url
         self.timeout = 30
     
@@ -38,7 +46,8 @@ class APIClient:
                 # Token expired or invalid — clear auth state
                 st.session_state.pop("auth_token", None)
                 st.session_state.pop("current_user", None)
-                st.error("🔐 Session expired. Please log in again.")
+                if endpoint != "/api/auth/login":
+                    st.error("Session expired. Please log in again.", icon="🚨")
                 return None
             elif response.status_code == 404:
                 st.error(f"Resource not found: {endpoint}")
@@ -130,7 +139,7 @@ class APIClient:
             elif response.status_code == 401:
                 st.session_state.pop("auth_token", None)
                 st.session_state.pop("current_user", None)
-                st.error("🔐 Session expired. Please log in again.")
+                st.error("Session expired. Please log in again.", icon="🚨")
                 return None
             else:
                 try:
