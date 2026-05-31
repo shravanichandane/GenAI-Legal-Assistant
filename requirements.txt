@@ -24,3 +24,5 @@ email-validator==2.1.0
 # Frontend dependencies
 pandas==2.2.3
 requests==2.31.0
+streamlit>=1.31.0
+plotly>=5.18.0
