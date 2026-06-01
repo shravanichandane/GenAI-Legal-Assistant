@@ -668,6 +668,7 @@ def render_dashboard_page():
                             st.error(f"Failed to update clause {clause_index + 1}: {str(e)}")
                     
                     if updated_count > 0:
+                        st.cache_data.clear()
                         st.success(f"✅ Successfully updated {updated_count} clauses!")
                         st.rerun()
                     else:
@@ -786,6 +787,9 @@ def render_upload_page():
             # Analysis section
             st.markdown("---")
             st.markdown("### 🔍 Document Analysis Results")
+            
+            # Clear cache so we pull the fresh data
+            st.cache_data.clear()
             
             # Fetch fresh data after upload
             documents = fetch_documents()

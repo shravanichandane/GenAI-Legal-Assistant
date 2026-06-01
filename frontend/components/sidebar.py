@@ -106,8 +106,9 @@ def render_sidebar():
 
 def check_api_connection():
     """Check API connection with enhanced error handling"""
-    if "api_status" not in st.session_state or st.sidebar.button("🔄 Refresh", key="refresh_connection"):
+    if "api_status" not in st.session_state or st.sidebar.button("🔄 Refresh Connection & Data", key="refresh_connection", use_container_width=True):
         try:
+            st.cache_data.clear()
             st.session_state.api_status = api_client.check_health()
         except Exception:
             st.session_state.api_status = False

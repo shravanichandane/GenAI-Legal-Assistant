@@ -547,6 +547,7 @@ def render_clause_editor(clause_data: Dict[Any, Any], edit_mode: bool = False, u
                         try:
                             success = api_client.update_clause(clause_id, changes)
                             if success:
+                                st.cache_data.clear()
                                 st.success("✅ Clause updated successfully!")
                                 time.sleep(1)
                                 st.rerun()
@@ -585,6 +586,7 @@ def render_clause_editor(clause_data: Dict[Any, Any], edit_mode: bool = False, u
                             update_data['risk_score'] = risk_score_mapping[new_risk_level]
                         success = api_client.update_clause(clause_id, update_data)
                         if success:
+                            st.cache_data.clear()
                             st.success("✅ Clause updated successfully!")
                             time.sleep(0.8)
                             st.rerun()
