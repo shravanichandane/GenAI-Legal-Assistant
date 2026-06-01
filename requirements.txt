@@ -19,7 +19,7 @@ bcrypt==4.1.2
 email-validator==2.1.0
 
 # PostgreSQL driver (production only, skip on Windows local dev if it fails)
-# psycopg2-binary==2.9.9
+psycopg2-binary==2.9.9
 
 # Frontend dependencies
 pandas==2.2.3
