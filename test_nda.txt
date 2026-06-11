@@ -1,0 +1,13 @@
+NON-DISCLOSURE AGREEMENT
+
+This Non-Disclosure Agreement (the "Agreement") is entered into this 1st day of June 2026, by and between Test Company ("Disclosing Party") and Test Partner ("Receiving Party").
+
+1. Confidential Information: "Confidential Information" shall include any information disclosed by Disclosing Party to Receiving Party, either directly or indirectly, in writing, orally, or by inspection of tangible objects.
+
+2. Non-Disclosure: Receiving Party agrees not to use any Confidential Information for any purpose except to evaluate and engage in discussions concerning a potential business relationship between the parties. Receiving Party agrees not to disclose any Confidential Information to third parties.
+
+3. Term: This Agreement shall survive for a period of five (5) years from the date of disclosure of the Confidential Information.
+
+4. Governing Law: This Agreement shall be governed by and construed in accordance with the laws of the State of California without regard to its conflict of law principles.
+
+5. Liability: The liability of the Receiving Party for any breach of this agreement shall be unlimited. (HIGH RISK CLAUSE)

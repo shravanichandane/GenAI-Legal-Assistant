@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/lenovo/legal%20assistant/mlruns/0/d6631857e2ef4fd7a8e87ee4d590e076/artifacts
+end_time: 1780316195976
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: d6631857e2ef4fd7a8e87ee4d590e076
+run_name: exp_07_MiniLM
+run_uuid: d6631857e2ef4fd7a8e87ee4d590e076
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780316195916
+status: 4
+tags: []
+user_id: lenovo

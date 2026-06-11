@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/lenovo/legal%20assistant/mlruns/0/4bf5e4b41a4e4f5ca1dbb2e904b6ae52/artifacts
+end_time: 1780316192254
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 4bf5e4b41a4e4f5ca1dbb2e904b6ae52
+run_name: exp_06_FAISS
+run_uuid: 4bf5e4b41a4e4f5ca1dbb2e904b6ae52
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1780316192164
+status: 4
+tags: []
+user_id: lenovo

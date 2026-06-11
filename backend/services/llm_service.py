@@ -14,6 +14,7 @@ class GeminiLLMService:
         self.api_key = os.getenv("GOOGLE_API_KEY")
         # AI turned optional; default to rule-based (no hard deps on LangChain)
         self.llm = None
+        self._local_classifier = None
         if not self.api_key:
             logger.warning("GOOGLE_API_KEY not found. AI features will be disabled.")
         else:
@@ -62,59 +63,44 @@ class GeminiLLMService:
             logger.error(f"Error extracting clauses with Gemini: {e}")
             return self._extract_clauses_fallback(document_text)
     
+    def _get_local_classifier(self):
+        if self._local_classifier is None:
+            from app.models.legal_bert_classifier import LegalBertClassifier
+            self._local_classifier = LegalBertClassifier()
+        return self._local_classifier
+
     def _extract_clauses_fallback(self, document_text: str) -> List[Dict[str, Any]]:
-        """Extract clauses using rule-based approach when AI is not available"""
+        """Extract clauses using local LegalBert model fallback powered by the new HierarchicalParser"""
         if not document_text or len(document_text.strip()) < 50:
             return []
         
-        # Split text into sentences
-        sentences = [s.strip() for s in document_text.replace('\n', ' ').split('.') if len(s.strip()) > 30]
+        # IMPORT PARSER HERE to avoid circular imports during startup
+        from app.parsers.document_parser import HierarchicalParser
         
-        clause_keywords = {
-            "INDEMNITY": ["indemnify", "hold harmless", "defend", "indemnification"],
-            "LIABILITY": ["liability", "liable", "damages", "responsible for", "loss"],
-            "TERMINATION": ["terminate", "termination", "end this agreement", "expire", "dissolution"],
-            "PAYMENT": ["payment", "pay", "invoice", "fee", "cost", "price", "compensation"],
-            "CONFIDENTIALITY": ["confidential", "non-disclosure", "proprietary", "trade secret"],
-            "INTELLECTUAL_PROPERTY": ["intellectual property", "copyright", "trademark", "patent", "ip rights"]
-        }
+        # Flatten the tree so we have a linear list of clauses to classify
+        flat_nodes = HierarchicalParser.extract_flat_clauses(document_text)
+        
+        classifier = self._get_local_classifier()
         
         extracted_clauses = []
-        processed_sentences = set()
         
-        for clause_type, keywords in clause_keywords.items():
-            for sentence in sentences:
-                if any(keyword.lower() in sentence.lower() for keyword in keywords):
-                    if sentence not in processed_sentences:
-                        # Look for complete clause (this sentence + next 1-2 sentences)
-                        sentence_idx = sentences.index(sentence)
-                        clause_text = sentence
-                        
-                        # Add following sentences if they seem related
-                        for i in range(1, min(3, len(sentences) - sentence_idx)):
-                            next_sentence = sentences[sentence_idx + i]
-                            if len(clause_text + next_sentence) < 500:  # Keep clauses reasonable length
-                                clause_text += ". " + next_sentence
-                            else:
-                                break
-                        
-                        extracted_clauses.append({
-                            "clause_text": clause_text + ".",
-                            "clause_type": clause_type,
-                            "description": f"Clause related to {clause_type.lower().replace('_', ' ')}"
-                        })
-                        
-                        processed_sentences.add(sentence)
-        
-        # If no specific clauses found, extract some general clauses
-        if not extracted_clauses and sentences:
-            for i in range(0, min(3, len(sentences)), 2):
-                if len(sentences[i]) > 50:
-                    extracted_clauses.append({
-                        "clause_text": sentences[i] + ".",
-                        "clause_type": "GENERAL", 
-                        "description": "General contract clause"
-                    })
+        for node in flat_nodes:
+            text = node.get("text", "")
+            if len(text) < 20: continue # Skip very short structural fragments
+            
+            clause_type, confidence = classifier.predict(text)
+            
+            # If we matched a specific type, or it's a substantive paragraph
+            if clause_type != "GENERAL" or len(text) > 100:
+                # Carry over hierarchical metadata!
+                extracted_clauses.append({
+                    "id": node.get("id"),
+                    "clause_text": text,
+                    "clause_type": clause_type,
+                    "description": f"Clause related to {clause_type.lower().replace('_', ' ')} (confidence: {confidence:.2f})",
+                    "section_number": node.get("section_number"),
+                    "metadata": node.get("metadata", {})
+                })
         
         return extracted_clauses
     

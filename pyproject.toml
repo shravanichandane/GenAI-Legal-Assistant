@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "legalsight-ai"
+version = "0.1.0"
+description = "End-to-End Legal Intelligence Platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+
+dependencies = [
+    # ── Backend ──
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "sqlalchemy==2.0.36",
+    "python-multipart==0.0.6",
+    "pydantic==2.9.2",
+    "python-dotenv==1.0.1",
+
+    # ── Auth ──
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    "bcrypt==4.1.2",
+    "email-validator==2.1.0",
+
+    # ── Document Processing ──
+    "PyPDF2==3.0.1",
+    "python-docx==1.1.0",
+
+    # ── AI / LLM ──
+    "google-generativeai==0.3.2",
+
+    # ── Frontend ──
+    "streamlit>=1.31.0",
+    "pandas==2.2.3",
+    "requests==2.31.0",
+    "plotly>=5.18.0",
+]
+
+[project.optional-dependencies]
+# Install with: pip install -e ".[dev]"
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+    "ruff",
+]
+# Install with: pip install -e ".[ml]"
+ml = [
+    "torch>=2.0",
+    "transformers>=4.30",
+    "datasets",
+    "scikit-learn",
+    "xgboost",
+    "shap",
+    "mlflow",
+    "faiss-cpu",
+    "sentence-transformers",
+]
+# Install with: pip install -e ".[postgres]"
+postgres = [
+    "psycopg2-binary==2.9.9",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "backend*", "frontend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

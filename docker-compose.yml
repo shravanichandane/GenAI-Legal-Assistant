@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  api:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: legalsight-api:latest
+    container_name: legalsight_api
+    ports:
+      - "8000:8000"
+    environment:
+      - STORAGE_BACKEND=local
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/legalsight
+      # - R2_BUCKET_NAME=my-bucket
+      # - CF_ACCOUNT_ID=my-account-id
+      # - R2_ACCESS_KEY_ID=key
+      # - R2_SECRET_ACCESS_KEY=secret
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - local_uploads:/app/uploads
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    image: legalsight-worker:latest
+    container_name: legalsight_worker
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/legalsight
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+    command: celery -A app.worker.celery_app worker --loglevel=info
+
+  redis:
+    image: redis:7-alpine
+    container_name: legalsight_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: legalsight_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: legalsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d legalsight"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+  local_uploads:

@@ -1,28 +1,6 @@
-
-### requirements.txt
-
-# Backend dependencies
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-sqlalchemy==2.0.36
-python-multipart==0.0.6
-PyPDF2==3.0.1
-python-docx==1.1.0
-google-generativeai==0.3.2
-pydantic==2.9.2
-python-dotenv==1.0.1
-python-jose[cryptography]==3.3.0
-
-# Authentication
-passlib[bcrypt]==1.7.4
-bcrypt==4.1.2
-email-validator==2.1.0
-
-# PostgreSQL driver (production only, skip on Windows local dev if it fails)
-psycopg2-binary==2.9.9
-
-# Frontend dependencies
-pandas==2.2.3
-requests==2.31.0
-streamlit>=1.31.0
-plotly>=5.18.0
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+celery>=5.3.0
+redis>=5.0.0
+boto3>=1.28.0
+aiofiles>=23.2.1
