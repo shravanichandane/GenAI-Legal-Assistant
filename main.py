@@ -53,7 +53,10 @@ app.add_middleware(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict this to frontend origin
+    allow_origins=[
+        "http://localhost:3000",
+        "https://gen-ai-legal-assistant.vercel.app"
+    ], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
