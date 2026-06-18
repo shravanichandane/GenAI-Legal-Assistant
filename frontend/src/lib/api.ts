@@ -13,8 +13,8 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}) {
   // In a real app, this might be in an HttpOnly cookie or secure state
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   
-  const headers = {
-    ...options.headers,
+  const headers: Record<string, string> = {
+    ...(options.headers as Record<string, string> || {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
@@ -74,7 +74,7 @@ export const api = {
   // Contracts
   uploadContract: async (formData: FormData) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
     
     const response = await fetch(`${BASE_URL}/contracts/upload`, {
       method: "POST",
