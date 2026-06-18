@@ -32,37 +32,41 @@ def register_user(
     """
     Create new user.
     """
-    stmt = select(User).where(User.email == user_in.email)
-    user = db.execute(stmt).scalar_one_or_none()
-    if user:
-        raise HTTPException(
-            status_code=400,
-            detail="The user with this email already exists in the system.",
+    import traceback
+    try:
+        stmt = select(User).where(User.email == user_in.email)
+        user = db.execute(stmt).scalar_one_or_none()
+        if user:
+            raise HTTPException(
+                status_code=400,
+                detail="The user with this email already exists in the system.",
+            )
+        
+        from app.db.models import Organization
+        import uuid
+        org_id = uuid.uuid4()
+        new_org = Organization(
+            id=org_id,
+            name=f"{user_in.email}'s Organization"
         )
-    
-    from app.db.models import Organization
-    
-    # Create a default organization for the new user
-    import uuid
-    org_id = uuid.uuid4()
-    new_org = Organization(
-        id=org_id,
-        name=f"{user_in.email}'s Organization"
-    )
-    db.add(new_org)
-    
-    new_user = User(
-        id=uuid.uuid4(),
-        organization_id=org_id,
-        email=user_in.email,
-        hashed_password=security.get_password_hash(user_in.password),
-        is_active=True,
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    return {"message": "User registered successfully."}
+        db.add(new_org)
+        
+        new_user = User(
+            id=uuid.uuid4(),
+            organization_id=org_id,
+            email=user_in.email,
+            hashed_password=security.get_password_hash(user_in.password),
+            is_active=True,
+        )
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        return {"message": "User registered successfully."}
+    except Exception as e:
+        db.rollback()
+        error_msg = "".join(traceback.format_exception(type(e), e, e.__traceback__))
+        raise HTTPException(status_code=500, detail=error_msg)
 
 @router.post("/login", response_model=Token)
 @limiter.limit("5/minute")
