@@ -29,7 +29,7 @@ export default function ResearchPage() {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/v1/research/metrics');
+        const response = await fetch('https://genai-legal-assistant.onrender.com/api/v1/research/metrics');
         if (!response.ok) throw new Error('API Error');
         const data = await response.json();
         setMetrics(data);
@@ -68,7 +68,7 @@ export default function ResearchPage() {
 
       {error ? (
         <div className="bg-rose-50 border border-rose-200 p-8 text-center text-rose-700 font-mono text-sm">
-          Failed to connect to FastAPI Backend (`http://localhost:8000`). Please ensure the server is running.
+          Failed to connect to FastAPI Backend (`https://genai-legal-assistant.onrender.com`). Please ensure the server is running.
         </div>
       ) : loading ? (
         <div className="flex items-center justify-center py-32">
