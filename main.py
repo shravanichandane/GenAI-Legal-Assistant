@@ -20,7 +20,16 @@ async def lifespan(app: FastAPI):
     # Setup DB connections, external API clients, etc., here.
     from app.db.database import engine, Base
     from app.db import models
-    Base.metadata.create_all(bind=engine)
+    import sqlalchemy.exc
+    try:
+        Base.metadata.create_all(bind=engine)
+    except sqlalchemy.exc.ProgrammingError as e:
+        if "DatatypeMismatch" in str(e):
+            logger.warning("Schema mismatch detected (likely from an old deploy). Wiping database and rebuilding clean schema...")
+            Base.metadata.drop_all(bind=engine)
+            Base.metadata.create_all(bind=engine)
+        else:
+            raise e
     yield
     # Shutdown actions
     logger.info("Shutting down LegalSight AI API...")
