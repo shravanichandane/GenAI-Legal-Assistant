@@ -21,12 +21,15 @@ async def lifespan(app: FastAPI):
     from app.db.database import engine, Base
     from app.db import models
     import sqlalchemy.exc
+    from sqlalchemy import text
     try:
         Base.metadata.create_all(bind=engine)
     except sqlalchemy.exc.ProgrammingError as e:
         if "DatatypeMismatch" in str(e):
-            logger.warning("Schema mismatch detected (likely from an old deploy). Wiping database and rebuilding clean schema...")
-            Base.metadata.drop_all(bind=engine)
+            logger.warning("Schema mismatch detected (likely from an old deploy). Wiping database using CASCADE...")
+            with engine.begin() as conn:
+                conn.execute(text("DROP SCHEMA public CASCADE;"))
+                conn.execute(text("CREATE SCHEMA public;"))
             Base.metadata.create_all(bind=engine)
         else:
             raise e
