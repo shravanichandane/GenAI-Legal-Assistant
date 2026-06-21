@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 class RAGResponse(BaseModel):
     clause_id: str = ""
@@ -12,3 +12,4 @@ class RAGResponse(BaseModel):
     recommendation: str
     evidence: List[Dict[str, str]]
     requires_human_review: bool
+    boundingBox: Optional[Dict[str, float]] = None

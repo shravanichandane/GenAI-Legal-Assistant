@@ -17,6 +17,7 @@ import {
   BrainCircuit,
   PenTool
 } from "lucide-react";
+import PdfViewer from "@/components/PdfViewer";
 
 // Mock risk findings
 const RISK_FINDINGS = [
@@ -50,7 +51,33 @@ const RISK_FINDINGS = [
 ];
 
 // Envato Premium Accordion Component
-const RiskAccordion = ({ risk, isOpen, onToggle }: { risk: any, isOpen: boolean, onToggle: () => void }) => {
+const RiskAccordion = ({ risk, isOpen, onToggle, contractId }: { risk: any, isOpen: boolean, onToggle: () => void, contractId: string }) => {
+  const [editedLanguage, setEditedLanguage] = useState(risk.suggestedLanguage || "");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  React.useEffect(() => {
+    setEditedLanguage(risk.suggestedLanguage || "");
+  }, [risk.suggestedLanguage]);
+
+  const handleSubmitTelemetry = async () => {
+    setIsSubmitting(true);
+    try {
+      const { api } = await import("@/lib/api");
+      await api.submitTelemetry(contractId, {
+        clause_id: risk.id,
+        clause_type: risk.title,
+        ai_suggested_text: risk.suggestedLanguage || "",
+        lawyer_final_text: editedLanguage
+      });
+      setSubmitSuccess(true);
+      setTimeout(() => setSubmitSuccess(false), 3000);
+    } catch (e) {
+      console.error("Failed to submit telemetry", e);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
   return (
     <div className={`border-b transition-all duration-300 ${
       isOpen ? "border-amber-600 bg-white" : "border-slate-200 bg-slate-50 hover:bg-slate-100"
@@ -118,6 +145,36 @@ const RiskAccordion = ({ risk, isOpen, onToggle }: { risk: any, isOpen: boolean,
                   </p>
                 </div>
               </div>
+
+              {risk.suggestedLanguage && (
+                <div className="mt-6 bg-slate-50 border border-slate-200 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500 flex items-center gap-2">
+                      <PenTool className="w-3 h-3 text-amber-600" />
+                      Suggested Language (Editable Redline)
+                    </span>
+                  </div>
+                  <textarea
+                    value={editedLanguage}
+                    onChange={(e) => setEditedLanguage(e.target.value)}
+                    className="w-full bg-white border border-slate-200 p-3 text-xs font-mono text-slate-800 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors min-h-[100px]"
+                    placeholder="Enter final accepted language..."
+                  />
+                  <div className="flex justify-end mt-3">
+                    <button
+                      onClick={handleSubmitTelemetry}
+                      disabled={isSubmitting || submitSuccess}
+                      className={`flex items-center gap-2 px-4 py-2 text-xs font-bold uppercase tracking-[0.1em] transition-colors ${
+                        submitSuccess
+                          ? "bg-emerald-50 text-emerald-600 border border-emerald-200"
+                          : "bg-slate-900 text-white hover:bg-slate-800"
+                      }`}
+                    >
+                      {isSubmitting ? "Saving..." : submitSuccess ? <><Check className="w-4 h-4" /> Saved</> : "Approve Edit"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </motion.div>
         )}
@@ -138,12 +195,15 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
   const [appMode, setAppMode] = useState('demo');
 
   const [overallScore, setOverallScore] = useState(0);
+  const [contractPdfUrl, setContractPdfUrl] = useState<string>("");
 
   React.useEffect(() => {
     // Fetch live data from API
     const fetchContractData = async () => {
       try {
         const { api } = await import("@/lib/api");
+        
+        setContractPdfUrl(api.getContractPdfUrl(id));
         
         // 1. Fetch text content
         try {
@@ -244,58 +304,14 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
           </div>
         </div>
 
-        {/* Mock PDF Content */}
-        <div className="flex-1 overflow-auto p-12 flex justify-center pb-32">
-          <div 
-            className="w-full max-w-2xl bg-white shadow-2xl min-h-[1000px] border border-slate-200 p-16 text-slate-800 text-sm leading-relaxed font-serif relative transition-transform duration-300"
-            style={{ transform: `scale(${zoom / 100})`, transformOrigin: 'top center' }}
-          >
-            
-            {contractText ? (
-              <div className="whitespace-pre-wrap font-serif leading-loose text-slate-900 text-base">
-                {contractText}
-              </div>
-            ) : (
-              <>
-                <h1 className="text-3xl font-bold text-center mb-12 tracking-wide text-slate-950">MASTER SERVICES AGREEMENT</h1>
-                <p className="mb-8 text-justify">This Master Services Agreement ("Agreement") is entered into as of October 1, 2026, by and between TechCorp Inc., a Delaware corporation ("Provider"), and Client LLC ("Client").</p>
-                
-                <h2 className="font-bold mt-10 mb-4 tracking-widest uppercase text-xs font-sans text-slate-500">3. Term and Termination</h2>
-                <p className="mb-6 text-justify">
-                  <span className={`transition-all duration-500 ${openAccordion === 'risk-2' ? 'bg-amber-600/20 border-b border-amber-600 text-slate-950' : ''}`}>
-                    3.1 Term. This Agreement shall commence on the Effective Date and shall continue for an initial term of one (1) year. This Agreement shall automatically renew for additional one (1) year periods unless terminated by either party.
-                  </span>
-                </p>
-                
-                <h2 className="font-bold mt-10 mb-4 tracking-widest uppercase text-xs font-sans text-slate-500">8. Indemnification and Liability</h2>
-                <p className="mb-6 text-justify">
-                  <span className={`transition-all duration-500 ${openAccordion === 'risk-1' ? 'bg-amber-600/20 border-b border-amber-600 text-slate-950' : ''}`}>
-                    8.2 Indemnification. Provider shall indemnify and hold harmless the Client against any and all claims, damages, or losses arising from Provider's performance of services under this Agreement.
-                  </span>
-                </p>
-
-                <h2 className="font-bold mt-10 mb-4 tracking-widest uppercase text-xs font-sans text-slate-500">14. Miscellaneous</h2>
-                <p className="mb-6 text-justify">
-                  <span className={`transition-all duration-500 ${openAccordion === 'risk-3' ? 'bg-amber-600/20 border-b border-amber-600 text-slate-950' : ''}`}>
-                    14.1 Governing Law. This Agreement shall be governed by and construed in accordance with the laws of the State of New York, without regard to its conflict of law principles.
-                  </span>
-                </p>
-              </>
-            )}
-            
-            {/* Filler text for scroll */}
-            {!contractText && (
-              <div className="mt-12 opacity-50 space-y-4">
-                <div className="h-2 bg-slate-100 w-full"></div>
-                <div className="h-2 bg-slate-100 w-5/6"></div>
-                <div className="h-2 bg-slate-100 w-full"></div>
-                <div className="h-2 bg-slate-100 w-4/5"></div>
-                <div className="h-2 bg-slate-100 w-full mt-8"></div>
-                <div className="h-2 bg-slate-100 w-full"></div>
-                <div className="h-2 bg-slate-100 w-2/3"></div>
-              </div>
-            )}
-          </div>
+        {/* PDF Content */}
+        <div className="flex-1 overflow-auto p-12 flex justify-center pb-32 bg-slate-100">
+          <PdfViewer 
+            url={contractPdfUrl} 
+            zoom={zoom} 
+            risks={dynamicRisks} 
+            activeRiskId={openAccordion} 
+          />
         </div>
       </div>
 
@@ -341,6 +357,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
                 risk={risk} 
                 isOpen={openAccordion === risk.id}
                 onToggle={() => setOpenAccordion(openAccordion === risk.id ? null : risk.id)}
+                contractId={id}
               />
             ))}
           </div>

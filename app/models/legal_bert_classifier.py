@@ -1,55 +1,53 @@
 import logging
-from typing import Tuple
-from transformers import pipeline
+from typing import Tuple, List, Any
+import torch
 
 logger = logging.getLogger(__name__)
 
 class LegalBertClassifier:
     """
-    Phase 1 Legal-BERT Inference Pipeline.
+    Phase 3 Legal-BERT Inference Pipeline.
     
-    NOTE: For the MVP, since `nlpaueb/legal-bert-base-uncased` is not natively a zero-shot NLI model,
-    we are using `facebook/bart-large-mnli` as a stand-in to simulate the behavior. 
-    This class will be updated to use the fine-tuned Legal-BERT model in Phase 2.
+    Uses sentence-transformers with a legally fine-tuned model (NchuNLP/Legal-Sentence-RoBERTa)
+    to generate embeddings for clauses and playbook rules. Cosine similarity is used 
+    to classify the clauses against the rules.
     """
     
     def __init__(self):
         try:
-            logger.info("Initializing LegalBertClassifier (using typeform/distilbert-base-uncased-mnli for ultra-fast load)...")
-            self.classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli")
-            self.labels = [
-                "LIABILITY", 
-                "INDEMNITY", 
-                "TERMINATION", 
-                "PAYMENT", 
-                "CONFIDENTIALITY", 
-                "INTELLECTUAL_PROPERTY", 
-                "GENERAL"
-            ]
+            logger.info("Initializing LegalBertClassifier with NchuNLP/Legal-Sentence-RoBERTa...")
+            from sentence_transformers import SentenceTransformer, util
+            self.util = util
+            # Use a robust, legal-specific sentence transformer to avoid standard BERT anisotropy
+            self.model = SentenceTransformer("NchuNLP/Legal-Sentence-RoBERTa")
             logger.info("LegalBertClassifier initialized successfully.")
+        except ImportError:
+            logger.error("sentence-transformers is not installed.")
+            self.model = None
+            self.util = None
         except Exception as e:
-            logger.error(f"Failed to initialize zero-shot pipeline: {e}")
-            self.classifier = None
-            self.labels = []
+            logger.error(f"Failed to initialize sentence-transformers pipeline: {e}")
+            self.model = None
+            self.util = None
 
-    def predict(self, text: str) -> Tuple[str, float]:
+    def encode(self, texts: List[str]) -> Any:
         """
-        Predicts the clause type for the given text.
-        Returns a tuple of (predicted_label, confidence_score).
+        Generates embeddings for a list of texts.
         """
-        if not self.classifier:
-            logger.warning("Classifier is not loaded. Returning fallback.")
-            return "GENERAL", 0.0
+        if not self.model or not texts:
+            return None
+        return self.model.encode(texts, convert_to_tensor=True)
+
+    def compute_similarity(self, clause_embedding: Any, rule_embeddings: Any) -> Tuple[int, float]:
+        """
+        Computes cosine similarity between a clause embedding and a list of rule embeddings.
+        Returns the (best_match_index, highest_similarity_score).
+        """
+        if not self.util or clause_embedding is None or rule_embeddings is None:
+            return -1, 0.0
             
-        if not text or not text.strip():
-            return "GENERAL", 0.0
-            
-        try:
-            result = self.classifier(text, candidate_labels=self.labels)
-            predicted_label = result['labels'][0]
-            confidence = result['scores'][0]
-            
-            return predicted_label, confidence
-        except Exception as e:
-            logger.error(f"Prediction failed: {e}")
-            return "GENERAL", 0.0
+        cosine_scores = self.util.cos_sim(clause_embedding, rule_embeddings)[0]
+        best_match_idx = torch.argmax(cosine_scores).item()
+        best_score = cosine_scores[best_match_idx].item()
+        
+        return best_match_idx, best_score

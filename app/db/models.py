@@ -1,7 +1,7 @@
 import uuid
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import ForeignKey, String, Text, DateTime, JSON, Enum as SQLEnum, Boolean
+from sqlalchemy import ForeignKey, String, Text, DateTime, JSON, Enum as SQLEnum, Boolean, Float
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -53,6 +53,7 @@ class Contract(BaseEntity):
     status: Mapped[ContractStatus] = mapped_column(SQLEnum(ContractStatus), default=ContractStatus.DRAFT)
     content_text: Mapped[str] = mapped_column(Text, nullable=True)
     metadata_json: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
+    file_path: Mapped[str] = mapped_column(String(1024), nullable=True)
     
     organization: Mapped["Organization"] = relationship(back_populates="contracts")
     clauses: Mapped[list["Clause"]] = relationship(back_populates="contract", cascade="all, delete-orphan")
@@ -100,3 +101,15 @@ class AuditEvent(BaseEntity):
     resource_type: Mapped[str] = mapped_column(String(100), nullable=False)
     resource_id: Mapped[uuid.UUID] = mapped_column(nullable=True)
     details: Mapped[dict] = mapped_column(JSON, nullable=True, default=dict)
+
+class CorrectionDelta(BaseEntity):
+    __tablename__ = "correction_deltas"
+    
+    organization_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    contract_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("contracts.id", ondelete="CASCADE"), nullable=False, index=True)
+    clause_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    clause_type: Mapped[str] = mapped_column(String(255), nullable=True)
+    
+    ai_suggested_text: Mapped[str] = mapped_column(Text, nullable=False)
+    lawyer_final_text: Mapped[str] = mapped_column(Text, nullable=False)
+    similarity_score: Mapped[float] = mapped_column(Float, nullable=False)

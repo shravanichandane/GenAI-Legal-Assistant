@@ -1,11 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { FileText, BookOpen, BarChart3, Settings, Bell, Search, Menu, Cpu, SquareTerminal } from "lucide-react";
+import { FileText, BookOpen, BarChart3, Settings, Bell, Search, Menu, Cpu, SquareTerminal, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { DemoBanner } from "@/components/DemoBanner";
+import { api } from "@/lib/api";
 
 const navItems = [
   { icon: SquareTerminal, label: "Dashboard", href: "/home" },
@@ -25,18 +26,42 @@ export default function DashboardLayout({
   const [isSidebarOpen, setSidebarOpen] = useState(true);
   const router = useRouter();
   const [userEmail, setUserEmail] = useState("Managing Partner");
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
 
   useEffect(() => {
-    const email = localStorage.getItem('user_email');
-    if (email) setUserEmail(email);
-  }, []);
+    const checkAuth = async () => {
+      try {
+        const user = await api.getMe();
+        setUserEmail(user.email || "Managing Partner");
+        setIsAuthChecked(true);
+      } catch {
+        // Not authenticated — redirect to login
+        router.push('/login');
+      }
+    };
+    checkAuth();
+  }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('logged_in');
-    localStorage.removeItem('user_email');
-    localStorage.removeItem('app_mode');
+  const handleLogout = async () => {
+    try {
+      await api.logout();
+    } catch {
+      // Even if logout API fails, redirect to login
+    }
     router.push('/login');
   };
+
+  // Show a centered loading spinner while auth is being verified
+  if (!isAuthChecked) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#FDFBF7]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 animate-spin text-amber-600" />
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">Verifying Session</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-white overflow-hidden">

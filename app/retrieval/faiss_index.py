@@ -9,22 +9,12 @@ When you have millions of legal documents, comparing a user's query embedding ag
 
 How it connects to the overall architecture:
 After `embedder.py` creates embeddings for the document corpus, they are added to `faiss_index.py`. During inference, `retriever.py` uses this class to fetch the top-K most relevant document IDs for a given query embedding.
-
-Beginner-Friendly Explanation:
-- What is FAISS? A library by Facebook for efficient similarity search of dense vectors.
-- What is Cosine Similarity / L2 Distance? Vectors are points in space. L2 Distance measures the straight-line distance between two points. Inner Product (which correlates with Cosine Similarity for normalized vectors) measures the angle between them. Smaller angle = more similar meaning.
-- Index: A data structure that stores the vectors in a way that makes searching them fast.
-
-Interview Questions and Answers:
-Q: What is the difference between IndexFlatL2 and IndexIVFFlat in FAISS?
-A: IndexFlatL2 performs an exact nearest neighbor search by comparing the query against every vector (brute force). It's highly accurate but slow for huge datasets. IndexIVFFlat divides the vector space into clusters (cells) and only searches the clusters closest to the query, providing an Approximate Nearest Neighbor (ANN) search which is much faster but slightly less accurate.
-
-Q: Why might we normalize embeddings before putting them into FAISS?
-A: If we normalize vectors to unit length, the L2 distance rank mathematically becomes equivalent to Cosine Similarity rank. This is often preferred in NLP tasks.
 """
 
 import logging
 import numpy as np
+import os
+import json
 from typing import List, Tuple, Dict, Any
 
 try:
@@ -35,88 +25,124 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-
 class FaissIndex:
     """
-    Vector database wrapper using FAISS for storing and searching dense embeddings.
+    Vector database wrapper using FAISS for storing and searching dense embeddings,
+    with multi-tenant namespaces and lazy-loaded disk persistence.
     """
 
-    def __init__(self, embedding_dimension: int, index_type: str = "Flat"):
-        """
-        Initialize the FAISS index.
-        
-        Args:
-            embedding_dimension (int): The size of the embedding vectors (e.g., 384 for MiniLM).
-            index_type (str): Type of FAISS index. 'Flat' uses exact L2 search.
-        """
+    def __init__(self, embedding_dimension: int, index_type: str = "Flat", base_path: str = "data/faiss"):
         self.embedding_dimension = embedding_dimension
         self.index_type = index_type
+        self.base_path = base_path
         
         if faiss is None:
             raise ImportError("Please install faiss-cpu or faiss-gpu to use FaissIndex.")
             
-        logger.info(f"Initializing FAISS Index (Dim: {embedding_dimension}, Type: {index_type})")
+        logger.info(f"Initializing FAISS Manager (Dim: {embedding_dimension}, Type: {index_type})")
         
-        # IndexFlatL2 is exact search (brute-force) based on Euclidean distance.
-        if index_type == "Flat":
-            self.index = faiss.IndexFlatL2(embedding_dimension)
-        else:
-            raise NotImplementedError(f"Index type '{index_type}' not yet implemented in this module.")
-            
-        # Metadata storage mapping FAISS internal ID to actual document ID/content
-        self.doc_metadata: Dict[int, Dict[str, Any]] = {}
+        os.makedirs(self.base_path, exist_ok=True)
+        
+        # In-memory caches
+        self.indices: Dict[str, faiss.Index] = {}
+        self.doc_metadata: Dict[str, Dict[int, Dict[str, Any]]] = {}
 
-    def add_vectors(self, embeddings: List[List[float]], metadata: List[Dict[str, Any]]):
-        """
-        Adds vectors and their metadata to the index.
+    def _get_or_load_namespace(self, namespace: str) -> Tuple[faiss.Index, Dict[int, Dict[str, Any]]]:
+        if namespace in self.indices:
+            return self.indices[namespace], self.doc_metadata[namespace]
+            
+        # Lazy load from disk
+        index_path = os.path.join(self.base_path, f"{namespace}.index")
+        meta_path = os.path.join(self.base_path, f"{namespace}.json")
         
-        Args:
-            embeddings: List of vectors to add.
-            metadata: List of dictionaries containing document metadata (e.g., doc_id, text).
-        """
+        if os.path.exists(index_path) and os.path.exists(meta_path):
+            logger.info(f"Lazy loading FAISS index for namespace '{namespace}' from disk.")
+            index = faiss.read_index(index_path)
+            with open(meta_path, "r", encoding="utf-8") as f:
+                meta_dict_str = json.load(f)
+            # JSON keys are strings, convert back to int
+            meta_dict = {int(k): v for k, v in meta_dict_str.items()}
+            
+            self.indices[namespace] = index
+            self.doc_metadata[namespace] = meta_dict
+        else:
+            logger.info(f"Creating new FAISS index for namespace '{namespace}'.")
+            if self.index_type == "Flat":
+                index = faiss.IndexFlatL2(self.embedding_dimension)
+            else:
+                raise NotImplementedError(f"Index type '{self.index_type}' not yet implemented.")
+            
+            self.indices[namespace] = index
+            self.doc_metadata[namespace] = {}
+            
+        return self.indices[namespace], self.doc_metadata[namespace]
+
+    def save_local(self, namespace: str):
+        """Persist a namespace index to disk."""
+        if namespace not in self.indices:
+            return
+            
+        index_path = os.path.join(self.base_path, f"{namespace}.index")
+        meta_path = os.path.join(self.base_path, f"{namespace}.json")
+        
+        faiss.write_index(self.indices[namespace], index_path)
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(self.doc_metadata[namespace], f)
+        logger.info(f"Saved FAISS index for '{namespace}' to disk.")
+
+    def add_vectors(self, namespace: str, embeddings: List[List[float]], metadata: List[Dict[str, Any]]):
         if len(embeddings) != len(metadata):
             raise ValueError("Number of embeddings must match number of metadata items.")
             
-        vectors = np.array(embeddings).astype('float32')
-        
-        # The starting ID for these new vectors
-        start_id = self.index.ntotal
-        
-        # Add to FAISS index
-        self.index.add(vectors)
-        
-        # Store metadata
-        for i, meta in enumerate(metadata):
-            self.doc_metadata[start_id + i] = meta
-            
-        logger.info(f"Added {len(vectors)} vectors to FAISS index. Total vectors: {self.index.ntotal}")
+        if not embeddings:
+            return
 
-    def search(self, query_embedding: List[float], top_k: int = 5) -> List[Tuple[float, Dict[str, Any]]]:
-        """
-        Searches the index for the most similar vectors to the query.
+        index, meta_dict = self._get_or_load_namespace(namespace)
         
-        Args:
-            query_embedding: The dense vector representation of the query.
-            top_k: Number of results to return.
+        vectors = np.array(embeddings).astype('float32')
+        start_id = index.ntotal
+        
+        index.add(vectors)
+        
+        for i, meta in enumerate(metadata):
+            meta_dict[start_id + i] = meta
             
-        Returns:
-            List of tuples: (distance_score, metadata_dict)
-        """
-        if self.index.ntotal == 0:
-            logger.warning("Search called on an empty FAISS index.")
+        self.save_local(namespace)
+        logger.info(f"Added {len(vectors)} vectors to namespace '{namespace}'. Total: {index.ntotal}")
+
+    def search(self, namespace: str, query_embedding: List[float], top_k: int = 5, filter_metadata: Dict[str, Any] = None) -> List[Tuple[float, Dict[str, Any]]]:
+        index, meta_dict = self._get_or_load_namespace(namespace)
+        
+        if index.ntotal == 0:
+            logger.warning(f"Search called on an empty FAISS index for '{namespace}'.")
             return []
             
         query_vector = np.array([query_embedding]).astype('float32')
         
-        # Perform search
-        distances, indices = self.index.search(query_vector, top_k)
+        # Over-fetch if filtering
+        fetch_k = min(index.ntotal, max(top_k * 10, 50)) if filter_metadata else min(index.ntotal, top_k)
+        
+        distances, indices = index.search(query_vector, fetch_k)
         
         results = []
         for j in range(len(indices[0])):
             idx = indices[0][j]
-            if idx != -1 and idx in self.doc_metadata: # -1 means not enough results
+            if idx != -1 and idx in meta_dict:
                 dist = distances[0][j]
-                meta = self.doc_metadata[idx]
-                results.append((float(dist), meta))
+                meta = meta_dict[idx]
                 
+                # Apply metadata filter
+                if filter_metadata:
+                    match = True
+                    for k, v in filter_metadata.items():
+                        if meta.get(k) != v:
+                            match = False
+                            break
+                    if not match:
+                        continue
+                        
+                results.append((float(dist), meta))
+                if len(results) >= top_k:
+                    break
+                    
         return results

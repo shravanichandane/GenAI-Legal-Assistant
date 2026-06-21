@@ -1,6 +1,6 @@
 import uuid
-from typing import Generator
-from fastapi import Depends, HTTPException, status
+from typing import Generator, Optional
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
 from pydantic import ValidationError
@@ -12,14 +12,37 @@ from app.db.models import User
 from app.config import settings
 from .jwt import TokenPayload
 
+# Keep OAuth2PasswordBearer for Swagger UI compatibility, but make it optional
+# so cookie-based auth can take priority.
 reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/login"
+    tokenUrl="/api/v1/auth/login",
+    auto_error=False,  # Don't raise if header is missing; we check cookies first
 )
 
 def get_current_user(
-    db: Session = Depends(get_db), token: str = Depends(reusable_oauth2)
+    request: Request,
+    db: Session = Depends(get_db),
+    bearer_token: Optional[str] = Depends(reusable_oauth2),
 ) -> User:
-    """FastAPI dependency to get the current authenticated user."""
+    """
+    FastAPI dependency to get the current authenticated user.
+    Reads JWT from the access_token HttpOnly cookie first,
+    falling back to the Authorization: Bearer header for API clients.
+    """
+    # 1. Try cookie first
+    token = request.cookies.get("access_token")
+
+    # 2. Fall back to Authorization header
+    if not token:
+        token = bearer_token
+
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     try:
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]

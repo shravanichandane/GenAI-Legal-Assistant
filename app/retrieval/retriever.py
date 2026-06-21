@@ -52,15 +52,16 @@ class Retriever:
         self.faiss_index = faiss_index
         logger.info("Retriever pipeline initialized.")
 
-    def add_documents(self, documents: List[str], metadata: List[Dict[str, Any]] = None):
+    def add_documents(self, namespace: str, documents: List[str], metadata: List[Dict[str, Any]] = None):
         """
-        Embeds texts and stores them in the index.
+        Embeds texts and stores them in the index under a specific namespace.
         
         Args:
+            namespace: The organization ID or isolated boundary ID.
             documents: List of text strings to index.
             metadata: Optional list of metadata dictionaries. If None, mock metadata is created.
         """
-        logger.info(f"Adding {len(documents)} documents to the retriever...")
+        logger.info(f"Adding {len(documents)} documents to the retriever under namespace '{namespace}'...")
         if metadata is None:
             metadata = [{"text": doc, "id": i} for i, doc in enumerate(documents)]
         else:
@@ -70,16 +71,18 @@ class Retriever:
                     metadata[i]["text"] = doc
 
         embeddings = self.embedder.embed_texts(documents)
-        self.faiss_index.add_vectors(embeddings, metadata)
+        self.faiss_index.add_vectors(namespace, embeddings, metadata)
         logger.info("Documents successfully added to the index.")
 
-    def retrieve(self, query: str, top_k: int = 5) -> Dict[str, Any]:
+    def retrieve(self, namespace: str, query: str, top_k: int = 5, filter_metadata: Dict[str, Any] = None) -> Dict[str, Any]:
         """
-        Retrieves the most relevant documents for a given query.
+        Retrieves the most relevant documents for a given query within a namespace.
         
         Args:
+            namespace: The organization ID or isolated boundary ID.
             query: The search string.
             top_k: The number of results to return.
+            filter_metadata: Optional dictionary of exact metadata matches required.
             
         Returns:
             A dictionary containing the retrieved documents and the latency.
@@ -90,7 +93,7 @@ class Retriever:
         query_embedding = self.embedder.embed_texts(query)[0]
         
         # 2. Search FAISS
-        results = self.faiss_index.search(query_embedding, top_k=top_k)
+        results = self.faiss_index.search(namespace, query_embedding, top_k=top_k, filter_metadata=filter_metadata)
         
         latency = time.time() - start_time
         logger.info(f"Retrieved {len(results)} results in {latency:.4f} seconds.")

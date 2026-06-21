@@ -12,14 +12,23 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [checkingSession, setCheckingSession] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Auto-login if previously authenticated
-    const isLoggedIn = localStorage.getItem('logged_in');
-    if (isLoggedIn === 'true') {
-      router.push('/home');
-    }
+    // Check if user already has a valid session cookie
+    const checkSession = async () => {
+      try {
+        const { api } = await import("@/lib/api");
+        await api.getMe();
+        // Session is valid — redirect to dashboard
+        router.push('/home');
+      } catch {
+        // No valid session — stay on login page
+        setCheckingSession(false);
+      }
+    };
+    checkSession();
   }, [router]);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -27,39 +36,28 @@ export default function LoginPage() {
     setErrorMsg("");
 
     // Validation
-    if (!email.toLowerCase().endsWith("@gmail.com")) {
-      setErrorMsg("Please enter a valid @gmail.com email address.");
-      return;
-    }
     if (password.length < 6) {
       setErrorMsg("Password must be at least 6 characters.");
       return;
     }
 
     setIsLoading(true);
-    
+
     try {
       const { api } = await import("@/lib/api");
-      
+
       if (isSignUp) {
         await api.register({ email, password });
         // Automatically login after successful registration
       }
-      
+
       const formData = new FormData();
       formData.append("username", email);
       formData.append("password", password);
-      
-      const res = await api.login(formData);
-      
-      // Set auth state
-      localStorage.setItem('access_token', res.access_token);
-      localStorage.setItem('logged_in', 'true');
-      localStorage.setItem('user_email', email);
-      
-      // Clear demo data flags upon login to show an empty environment
-      localStorage.setItem('app_mode', 'empty');
-      
+
+      await api.login(formData);
+
+      // Cookie is set by the backend automatically via Set-Cookie header
       router.push("/home");
     } catch (err: any) {
       setErrorMsg(err.message || "Authentication failed. Please check your credentials.");
@@ -67,6 +65,15 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  // Show nothing while checking existing session to avoid flash
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans">
@@ -111,12 +118,12 @@ export default function LoginPage() {
             </AnimatePresence>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">Google Workspace Email</label>
+              <label className="text-[10px] font-bold uppercase tracking-[0.15em] text-slate-500 block">Email Address</label>
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="attorney@gmail.com"
+                placeholder="attorney@example.com"
                 className="w-full bg-slate-50 border-b-2 border-slate-200 px-4 py-4 text-slate-950 focus:outline-none focus:bg-white focus:border-amber-600 transition-colors font-mono text-sm"
                 required
               />

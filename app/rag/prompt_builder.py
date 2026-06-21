@@ -26,9 +26,10 @@ def build_prompt(context: Dict[str, Any], evidence: List[Dict[str, str]]) -> str
 ### INSTRUCTIONS
 1. Analyze the 'clause' against the 'playbook_rule'.
 2. Consider any 'deterministic_violations' provided.
-3. Use the 'PRECEDENT EVIDENCE' to support your analysis.
-4. Output your response strictly as a JSON object matching the following schema.
-5. Do not include markdown formatting like ```json ... ```, just output the raw JSON object.
+3. Use the 'PRECEDENT EVIDENCE' as the "Gold Standard" for acceptable fallback language.
+4. If a rule violation occurs, your `suggested_language` MUST strictly mirror the phrasing and structure found in the PRECEDENT EVIDENCE, adapting it only to fit the current contract's context.
+5. Output your response strictly as a JSON object matching the following schema.
+6. Do not include markdown formatting like ```json ... ```, just output the raw JSON object.
 
 ### JSON SCHEMA
 {{

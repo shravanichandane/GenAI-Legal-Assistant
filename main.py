@@ -101,13 +101,14 @@ async def metrics():
     )
 
 
-from app.api.routers import contracts, playbooks, research
+from app.api.routers import contracts, playbooks, research, precedents
 from app.auth.router import router as auth_router
 
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["Auth"])
 app.include_router(contracts.router, prefix="/api/v1/contracts", tags=["Contracts"])
 app.include_router(playbooks.router, prefix="/api/v1/playbooks", tags=["Playbooks"])
 app.include_router(research.router, prefix="/api/v1/research", tags=["Research"])
+app.include_router(precedents.router, prefix="/api/v1/precedents", tags=["Precedents"])
 
 @app.get("/", tags=["Root"])
 async def root():

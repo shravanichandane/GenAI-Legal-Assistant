@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -62,7 +63,7 @@ def register_user(
     
     return {"message": "User registered successfully."}
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 @limiter.limit("5/minute")
 def login_access_token(
     request: Request,
@@ -70,7 +71,7 @@ def login_access_token(
     form_data: OAuth2PasswordRequestForm = Depends()
 ) -> Any:
     """
-    OAuth2 compatible token login, get an access token for future requests.
+    OAuth2 compatible token login. Sets access_token as HttpOnly cookie.
     """
     client_ip = request.client.host if request.client else None
     
@@ -123,11 +124,36 @@ def login_access_token(
         details="Successfully logged in"
     )
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "refresh_token": refresh_token
-    }
+    response = JSONResponse(content={
+        "status": "ok",
+        "message": "Login successful",
+        "refresh_token": refresh_token,
+    })
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    return response
+
+@router.post("/logout")
+def logout(request: Request):
+    """
+    Clear the access_token cookie to log out.
+    """
+    response = JSONResponse(content={"status": "ok", "message": "Logged out successfully"})
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return response
 
 from .refresh_tokens import verify_refresh_token
 from pydantic import BaseModel
@@ -135,13 +161,14 @@ from pydantic import BaseModel
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
-@router.post("/refresh", response_model=Token)
+@router.post("/refresh")
 def refresh_access_token(
     request_data: RefreshTokenRequest,
     db: Session = Depends(get_db)
 ) -> Any:
     """
     Refresh access token using a long-lived refresh token.
+    Sets new access_token as HttpOnly cookie.
     """
     user_id_str = verify_refresh_token(request_data.refresh_token)
     
@@ -169,11 +196,21 @@ def refresh_access_token(
     # Optionally issue a new refresh token (refresh token rotation)
     new_refresh_token = create_refresh_token(subject=str(user.id))
     
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "refresh_token": new_refresh_token
-    }
+    response = JSONResponse(content={
+        "status": "ok",
+        "message": "Token refreshed",
+        "refresh_token": new_refresh_token,
+    })
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        path="/",
+    )
+    return response
 
 from .deps import get_current_user
 
@@ -182,6 +219,6 @@ def get_me(current_user: User = Depends(get_current_user)):
     return {
         "id": str(current_user.id),
         "email": current_user.email,
-        "role": getattr(current_user, "role", "user")
+        "role": getattr(current_user, "role", "user"),
+        "organization_id": str(current_user.organization_id) if current_user.organization_id else None,
     }
-

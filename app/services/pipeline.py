@@ -96,32 +96,50 @@ class ContractAnalysisPipeline:
         if precedents:
             self.retriever.add_documents(precedents)
 
-    async def process_clause(self, clause_dict: Dict[str, Any]) -> Tuple[Any, Any]:
+    async def process_clause(self, clause_dict: Dict[str, Any], global_playbook_text: str = "",
+                             db_rules: list = None, rule_embeddings: Any = None, organization_id=None) -> Tuple[Any, Any]:
         clause_text = clause_dict.get("text", "")
         if not clause_text.strip():
             return None, None
             
         import asyncio
-        # Step 2: Classify Clause in thread
-        clause_type, confidence = await asyncio.to_thread(self.classifier.predict, clause_text)
+        # Step 2: Classify Clause using Legal-BERT cosine similarity
+        clause_type = "GENERAL"
+        confidence = 0.0
+        rule_description = ""
         
-        # Step 3: Fetch Playbook Rule
-        playbook_rule = await asyncio.to_thread(get_playbook_rule, clause_type)
-        playbook_text = playbook_rule.preferred_language if playbook_rule else "No specific rule available."
-        playbook_rule_id = playbook_rule.clause_type if playbook_rule else "none"
+        if db_rules and rule_embeddings is not None and self.classifier.model:
+            clause_emb = await asyncio.to_thread(self.classifier.encode, [clause_text])
+            best_match_idx, best_score = await asyncio.to_thread(
+                self.classifier.compute_similarity, clause_emb, rule_embeddings
+            )
+            # Threshold to match a specific rule
+            if best_score > 0.4:  # Configurable threshold
+                matched_rule = db_rules[best_match_idx]
+                clause_type = matched_rule.clause_type.upper()
+                rule_description = matched_rule.rule_description
+                confidence = best_score
+        
+        # Use dynamic playbook rules passed down
+        playbook_text = global_playbook_text
+        playbook_rule_id = "dynamic_playbook"
         
         # Step 4: Deterministic Risk Check
         deterministic_violations = []
         
         # Step 5 & 6: Retrieval & Reranking in thread
-        retrieval_res = await asyncio.to_thread(self.retriever.retrieve, clause_text, 10)
+        namespace = str(organization_id) if organization_id else "default"
+        query_text = rule_description if rule_description else clause_text
+        filter_meta = {"clause_type": clause_type} if clause_type != "GENERAL" else None
+        
+        retrieval_res = await asyncio.to_thread(self.retriever.retrieve, namespace, query_text, 10, filter_meta)
         docs = [item["metadata"]["text"] for item in retrieval_res["results"]]
         
         if self.reranker and docs:
-            reranked = await asyncio.to_thread(self.reranker.rerank, clause_text, docs, 3)
+            reranked = await asyncio.to_thread(self.reranker.rerank, clause_text, docs, 2)
             evidence = [{"id": f"prec_{i}", "text": res["text"]} for i, res in enumerate(reranked)]
         else:
-            evidence = [{"id": f"prec_{i}", "text": text} for i, text in enumerate(docs[:3])]
+            evidence = [{"id": f"prec_{i}", "text": text} for i, text in enumerate(docs[:2])]
             
         if not evidence:
             logger.warning("FAISS retrieved no evidence for clause.")
@@ -153,6 +171,9 @@ class ContractAnalysisPipeline:
             validated_json["clause_id"] = clause_id
             validated_json["text_snippet"] = clause_text[:200] + "..." if len(clause_text) > 200 else clause_text
             
+            if "boundingBox" in clause_dict:
+                validated_json["boundingBox"] = clause_dict["boundingBox"]
+            
             rag_resp = RAGResponse(**validated_json)
             
             trace = self.tracer.create_trace(
@@ -167,19 +188,39 @@ class ContractAnalysisPipeline:
             logger.error(f"Failed to process clause {clause_type}: {e}")
             return None, None
 
-    async def analyze(self, contract_text: str) -> Dict[str, Any]:
+    async def analyze(self, contract_text: str, organization_id=None, spatial_clauses=None) -> Dict[str, Any]:
         """
         Executes the full end-to-end pipeline concurrently.
         """
         start_time = time.time()
         import asyncio
+        from app.db.database import SessionLocal
+        from app.db.models import PlaybookRule
         
+        # Fetch dynamic playbook rules scoped to the caller's organization
+        global_playbook_text = "No specific rules configured."
+        db_rules = []
+        with SessionLocal() as db:
+            if organization_id:
+                db_rules = db.query(PlaybookRule).filter(PlaybookRule.organization_id == organization_id).all()
+                if db_rules:
+                    rules_str = [f"- [{r.clause_type.upper()}] {r.rule_description} (Mandatory: {r.is_mandatory})" for r in db_rules]
+                    global_playbook_text = "Global Company Playbook Policies:\n" + "\n".join(rules_str)
+
+        rule_embeddings = None
+        if db_rules and self.classifier.model:
+            rule_texts = [r.rule_description for r in db_rules]
+            rule_embeddings = self.classifier.encode(rule_texts)
+
         # Step 1: Parse Contract
         logger.info("Parsing document...")
-        flat_clauses = HierarchicalParser.extract_flat_clauses(contract_text)
+        if spatial_clauses:
+            flat_clauses = spatial_clauses
+        else:
+            flat_clauses = HierarchicalParser.extract_flat_clauses(contract_text)
         
         # Step 2-8: Process all clauses concurrently
-        tasks = [self.process_clause(c) for c in flat_clauses]
+        tasks = [self.process_clause(c, global_playbook_text, db_rules, rule_embeddings, organization_id) for c in flat_clauses]
         results = await asyncio.gather(*tasks)
         
         rag_responses = []
