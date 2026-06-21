@@ -5,10 +5,18 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1-009688.svg)
 ![Next.js](https://img.shields.io/badge/Next.js-14.0-black.svg)
 ![Tailwind](https://img.shields.io/badge/Tailwind-3.3-38B2AC.svg)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Vercel-black?style=flat-square&logo=vercel)](https://gen-ai-legal-assistant.vercel.app/)
 
-**LegalSight AI** is a production-grade, end-to-end Enterprise Legal Intelligence Operating System. 
+**LegalSight AI** is a production-grade, end-to-end Enterprise Legal Intelligence Operating System.
 
-It transcends traditional "AI Chatbots" by providing a complete, deterministic pipeline that shatters complex legal PDFs, classifies clauses using **Legal-BERT**, retrieves precedents via **FAISS Vector Search**, reranks context using **Cross-Encoders**, and synthesizes risk using **GenAI (LLMs)**—all wrapped in a strictly governed, multi-tenant SaaS architecture.
+It transcends traditional "AI Chatbots" by providing a complete, deterministic pipeline that shatters complex legal PDFs, classifies clauses using **Legal-BERT**, retrieves precedents via **FAISS Vector Search**, reranks context using **Cross-Encoders**, and synthesizes risk using **GenAI (LLMs)**, all wrapped in a strictly governed, multi-tenant SaaS architecture.
+
+## 🔗 Links
+
+- **Live Demo:** [gen-ai-legal-assistant.vercel.app](https://gen-ai-legal-assistant.vercel.app/)
+- **Research manuscript:** in preparation, ablation study on dense retrieval architectures for legal contract intelligence (see below)
+
+---
 
 ## 🧠 The End-to-End Mental Model
 
@@ -21,7 +29,7 @@ User Uploads Contract ➔ NLP (Legal-BERT) ➔ Semantic Structuring (Parser) ➔
 ## 🏗️ Core Architecture & Subsystems
 
 ### 1. NLP Layer (Clause Intelligence)
-Instead of forcing lawyers to read 50-page PDFs line-by-line, LegalSight utilizes a fine-tuned **Legal-BERT** Transformer model to semantically segment text into 40+ legal categories (e.g., Liability, Indemnification). 
+Instead of forcing lawyers to read 50-page PDFs line-by-line, LegalSight utilizes a fine-tuned **Legal-BERT** Transformer model to semantically segment text into 40+ legal categories (e.g., Liability, Indemnification).
 * **UI Mapping:** The Frontend binds semantic segmentation to UI navigation. Clicking "Liability Caps" in the Clause Index instantly scrolls and highlights the exact paragraph in the Document Viewer.
 
 ### 2. RAG + Retrieval Layer (FAISS + Cross-Encoder + Gemini)
@@ -48,12 +56,30 @@ The system creates a continuous learning loop. When a lawyer modifies an AI outp
 
 ---
 
+## 📊 Retrieval Ablation Study
+
+The FAISS + Cross-Encoder configuration above wasn't a default choice, it's the result of a structured ablation study evaluated on the **CUAD** and **ContractNLI** legal datasets, comparing sparse vs. dense retrieval, general-purpose vs. domain-specific embeddings, and two reranker models.
+
+| Configuration | nDCG@5 | Precision@5 | Latency |
+|---|---|---|---|
+| BM25 (sparse baseline) | 0.70 | 0.65 | ~10ms |
+| FAISS + MiniLM | 0.88 | 0.82 | ~45ms |
+| FAISS + Legal-BERT | 0.92 | 0.89 | ~120ms |
+| FAISS Top-20 + DeBERTa reranker | **0.93** | **0.94** | ~400-600ms |
+
+**Key finding:** the most accurate configuration (Legal-BERT + DeBERTa) runs roughly 10x slower than the fastest one (MiniLM, no reranker). For a real-time enterprise pipeline, "best model" is the wrong question, "best model for this latency budget" is the right one. This ablation work is the basis of a research manuscript currently in preparation.
+
+A FastAPI concurrency fix (`asyncio.to_thread` wrapping PyTorch inference) further cut per-document processing time by ~85% by enabling parallel clause processing instead of sequential inference.
+
+---
+
 ## 💻 Tech Stack
 
 * **Backend:** Python, FastAPI, SQLAlchemy, Celery, Redis.
 * **AI / ML:** HuggingFace Transformers (Legal-BERT, Cross-Encoders), FAISS, LangChain, Google Gemini API.
 * **Frontend:** Next.js 14 (App Router), React, Tailwind CSS, Framer Motion, Shadcn UI.
 * **Database:** PostgreSQL (Neon Serverless).
+* **Experiment Tracking:** MLflow.
 
 ## 🚀 Getting Started
 
@@ -75,3 +101,18 @@ cd frontend
 npm install
 npm run dev
 ```
+
+---
+
+## 📍 Roadmap
+
+- Fine-tune embedding models (LoRA/PEFT) on proprietary firm data to push general-purpose models closer to Legal-BERT accuracy at lower latency
+- Integrate a knowledge graph (Neo4j) for deterministic queries, e.g. "find all high-risk termination clauses involving Company X"
+- Expand the RLHF feedback loop into a continuous fine-tuning pipeline
+
+---
+
+## 📬 Connect
+
+- [LinkedIn](https://www.linkedin.com/in/shravani-c-58ab062b6/)
+- 📧 shravanichandane5@gmail.com
