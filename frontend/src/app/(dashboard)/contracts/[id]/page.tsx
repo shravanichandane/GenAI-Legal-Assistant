@@ -140,29 +140,20 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
   const [overallScore, setOverallScore] = useState(0);
 
   React.useEffect(() => {
-    const mode = localStorage.getItem('app_mode') || 'demo';
-    setAppMode(mode);
-
-    const text = localStorage.getItem('latest_uploaded_contract_text');
-    if (text) {
-      setContractText(text);
-    }
-
-    if (mode === 'empty') {
-      setDynamicRisks([]);
-      return;
-    }
-
-    if (mode === 'demo' && !id.startsWith("cnt_")) {
-      setDynamicRisks(RISK_FINDINGS);
-      setOpenAccordion(RISK_FINDINGS[0].id);
-      return;
-    }
-
-    // Fetch live risks from API
-    const fetchRisks = async () => {
+    // Fetch live data from API
+    const fetchContractData = async () => {
       try {
         const { api } = await import("@/lib/api");
+        
+        // 1. Fetch text content
+        try {
+          const contentData = await api.getContractContent(id);
+          if (contentData.content) setContractText(contentData.content);
+        } catch (e) {
+          console.warn("Failed to fetch contract content");
+        }
+
+        // 2. Fetch risks and score
         const risksData = await api.getContractRisks(id);
         const scoreData = await api.getContractRiskScore(id);
         
@@ -179,12 +170,18 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
           setOverallScore(risksData.risk_score);
         }
       } catch (err) {
-        console.error("Failed to fetch contract risks:", err);
+        console.error("Failed to fetch contract data:", err);
       }
     };
     
-    fetchRisks();
+    fetchContractData();
+    
+    // Poll for updates in case the document is still processing
+    const intervalId = setInterval(fetchContractData, 5000);
+    return () => clearInterval(intervalId);
   }, [id]);
+
+
 
   const handleAction = async (status: string) => {
     try {
@@ -197,17 +194,7 @@ export default function ReviewPage(props: { params: Promise<{ id: string }> }) {
     }
   };
 
-  if (appMode === 'empty') {
-    return (
-      <div className="flex h-[calc(100vh-4rem)] bg-white overflow-hidden items-center justify-center">
-        <div className="text-center">
-          <FileText className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-          <h2 className="text-2xl font-serif text-slate-950 mb-2">No Document Selected</h2>
-          <p className="text-slate-500">Please upload a document to begin analysis.</p>
-        </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-white overflow-hidden">

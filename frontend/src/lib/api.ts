@@ -92,10 +92,14 @@ export const api = {
   
   getContractRiskScore: (id: string) => fetchWithAuth(`/contracts/${id}/risk-score`),
   
+  getContractContent: (id: string) => fetchWithAuth(`/contracts/${id}/content`),
+  
   reviewAction: (id: string, action: string) => 
     fetchWithAuth(`/contracts/${id}/action`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action }),
     }),
+    
+  getContracts: () => fetchWithAuth(`/contracts/`),
 };

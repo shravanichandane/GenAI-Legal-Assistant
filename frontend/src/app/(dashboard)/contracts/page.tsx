@@ -4,19 +4,41 @@ import React, { useState } from 'react';
 import { Search, Filter, FileText, CheckCircle, AlertTriangle, Clock, MoreVertical, Plus } from 'lucide-react';
 import Link from 'next/link';
 
-// Mock Contract Data
-const mockContracts = [
-  { id: "1029", name: "Meridian SaaS Enterprise Agreement", vendor: "Meridian Tech", status: "Critical Risk", score: 72, date: "Oct 12, 2026", type: "SaaS" },
-  { id: "1028", name: "Apex Vendor API License V2", vendor: "Apex Corp", status: "Approved", score: 12, date: "Oct 11, 2026", type: "Vendor" },
-  { id: "1027", name: "GlobalTech Mutual NDA", vendor: "GlobalTech", status: "Pending Review", score: 45, date: "Oct 10, 2026", type: "NDA" },
-  { id: "1026", name: "Horizon Cloud Infrastructure Services", vendor: "Horizon", status: "Warning", score: 58, date: "Oct 09, 2026", type: "Infrastructure" },
-  { id: "1025", name: "Stark Industries Data Processing Addendum", vendor: "Stark Ind.", status: "Approved", score: 8, date: "Oct 08, 2026", type: "DPA" },
-];
+interface Contract {
+  id: string;
+  name: string;
+  vendor: string;
+  status: string;
+  score: number;
+  date: string;
+  type: string;
+}
 
 export default function ContractsRepository() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const filteredContracts = mockContracts.filter(c => 
+  React.useEffect(() => {
+    const fetchContracts = async () => {
+      try {
+        const { api } = await import("@/lib/api");
+        const data = await api.getContracts();
+        setContracts(data);
+      } catch (error) {
+        console.error("Failed to fetch contracts:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchContracts();
+    // Poll every 5 seconds to update statuses
+    const interval = setInterval(fetchContracts, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const filteredContracts = contracts.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     c.vendor.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -88,43 +110,60 @@ export default function ContractsRepository() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredContracts.map((contract) => (
-                <tr key={contract.id} className="hover:bg-slate-50/80 transition-colors group cursor-pointer">
-                  <td className="px-6 py-4">
-                    <Link href={`/contracts/${contract.id}`} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
-                        <FileText className="w-4 h-4" />
-                      </div>
-                      <span className="font-semibold text-indigo-950 hover:text-indigo-600 transition-colors">{contract.name}</span>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 text-slate-600 font-medium">{contract.vendor}</td>
-                  <td className="px-6 py-4 text-slate-500">{contract.type}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 bg-slate-100 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full ${contract.score > 60 ? 'bg-rose-500' : contract.score > 30 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
-                          style={{ width: `${contract.score}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-bold text-slate-700">{contract.score}</span>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span>Loading contracts from AI Backend...</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusStyle(contract.status)}`}>
-                      {getStatusIcon(contract.status)}
-                      {contract.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-slate-500">{contract.date}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-md hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100">
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+                </tr>
+              ) : filteredContracts.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-slate-500">
+                    No contracts uploaded yet. Click "Upload New Contract" to begin.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredContracts.map((contract) => (
+                  <tr key={contract.id} className="hover:bg-slate-50/80 transition-colors group cursor-pointer">
+                    <td className="px-6 py-4">
+                      <Link href={`/contracts/${contract.id}`} className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shrink-0">
+                          <FileText className="w-4 h-4" />
+                        </div>
+                        <span className="font-semibold text-indigo-950 hover:text-indigo-600 transition-colors">{contract.name}</span>
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-slate-600 font-medium">{contract.vendor}</td>
+                    <td className="px-6 py-4 text-slate-500">{contract.type}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${contract.score > 60 ? 'bg-rose-500' : contract.score > 30 ? 'bg-amber-400' : 'bg-emerald-500'}`} 
+                            style={{ width: `${contract.score}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-bold text-slate-700">{Math.round(contract.score)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold border ${getStatusStyle(contract.status)}`}>
+                        {getStatusIcon(contract.status)}
+                        {contract.status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-slate-500">{contract.date}</td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="p-1.5 text-slate-400 hover:text-indigo-600 rounded-md hover:bg-indigo-50 transition-colors opacity-0 group-hover:opacity-100">
+                        <MoreVertical className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -34,11 +34,45 @@ class ContractAnalysisPipeline:
         # Note: In a real production system, the FAISS index would be loaded from disk or a vector DB.
         # Here we initialize an empty one for the session, but we could populate it with precedents.
         self.embedder = Embedder()
-        self.faiss_index = FaissIndex(dimension=384) # Default for all-MiniLM-L6-v2
+        self.faiss_index = FaissIndex(embedding_dimension=384) # Default for all-MiniLM-L6-v2
         self.retriever = Retriever(embedder=self.embedder, faiss_index=self.faiss_index)
         
+        # Load CUADv1 dataset into FAISS index
         try:
-            self.reranker = CrossEncoderReranker(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
+            import json
+            import os
+            # Use absolute or relative path that works
+            cuad_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "data", "CUADv1.json"))
+            if os.path.exists(cuad_path):
+                logger.info(f"Seeding FAISS from {cuad_path} (Loading first 500 precedents for speed)")
+                with open(cuad_path, "r", encoding="utf-8") as f:
+                    cuad_data = json.load(f)
+                
+                precedents = []
+                # Parse SQuAD format
+                for doc in cuad_data.get("data", []):
+                    for paragraph in doc.get("paragraphs", []):
+                        for qa in paragraph.get("qas", []):
+                            for answer in qa.get("answers", []):
+                                text = answer.get("text", "").strip()
+                                if text and len(text) > 10:
+                                    precedents.append(text)
+                                    if len(precedents) >= 500:
+                                        break
+                            if len(precedents) >= 500:
+                                break
+                    if len(precedents) >= 500:
+                        break
+                        
+                self.seed_precedents(precedents)
+                logger.info(f"FAISS index seeded with {len(precedents)} CUAD precedents.")
+            else:
+                logger.warning(f"CUAD dataset not found at {cuad_path}. Index will be empty.")
+        except Exception as e:
+            logger.error(f"Failed to seed FAISS: {e}")
+            
+        try:
+            self.reranker = CrossEncoderReranker(mode="production")
         except Exception as e:
             logger.warning(f"Could not load reranker: {e}")
             self.reranker = None
@@ -90,7 +124,8 @@ class ContractAnalysisPipeline:
             evidence = [{"id": f"prec_{i}", "text": text} for i, text in enumerate(docs[:3])]
             
         if not evidence:
-            evidence = [{"id": "fallback_1", "text": "Standard market precedent..."}]
+            logger.warning("FAISS retrieved no evidence for clause.")
+            evidence = []
             
         # Step 7: Gemini Reasoning
         from app.rag.context_builder import build_context
